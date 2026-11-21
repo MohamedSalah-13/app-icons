@@ -3,12 +3,15 @@
  *
  * <p>{@code com.hamza.icons} draws the icon and writes its files (.ico, .icns, PNG) when the icon changes; it needs
  * {@code java.desktop}. {@code com.hamza.icons.fx} loads the window icons while the program runs; it needs JavaFX.
- * Both are optional, so a program that uses one half does not carry the other's module.
+ * {@code com.hamza.icons.svg} takes the drawing from an SVG instead of from code; it needs the JSVG library.
+ * All of these are optional, so a program that uses one part does not carry what the others need.
  */
 module com.hamza.icons {
     requires static transitive java.desktop;
     requires static transitive javafx.graphics;
+    requires static com.github.weisj.jsvg;
 
     exports com.hamza.icons;
     exports com.hamza.icons.fx;
+    exports com.hamza.icons.svg;
 }

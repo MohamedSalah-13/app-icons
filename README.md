@@ -6,8 +6,9 @@
 - **وقت تعديل الأيقونة** (`com.hamza.icons`): ترسم كل مقاس مستقلًا ثم تكتب ملف Windows ‏(`.ico`)،
   وملف macOS ‏(`.icns`)، وصورة Linux، وصور نوافذ البرنامج.
 - **وقت التشغيل** (`com.hamza.icons.fx`): تضع الأيقونة بكل مقاساتها على النافذة والحوارات.
-- بلا أي اعتماديات. Java 21 فأحدث. النصفان اختياريان: من يستخدم أحدهما لا يحمل وحدة الآخر
-  (`java.desktop` للأول و JavaFX للثاني).
+- **من SVG** (`com.hamza.icons.svg`): لمن أيقونته ملف SVG لا رسم بالكود، كتطبيقات الويب؛ بلا متصفح.
+- بلا أي اعتماديات، إلا جزء SVG الاختياري. Java 21 فأحدث. الأجزاء كلها اختيارية: من يستخدم أحدها لا يحمل
+  ما يحتاجه غيره (`java.desktop` للأول، و JavaFX للثاني، ومكتبة JSVG للثالث).
 
 ## الاستخدام
 
@@ -32,7 +33,7 @@
 <dependency>
     <groupId>com.github.MohamedSalah-13</groupId>
     <artifactId>app-icons</artifactId>
-    <version>v0.2.0</version>
+    <version>v0.3.0</version>
 </dependency>
 ```
 
@@ -77,7 +78,7 @@ public class AppIcon {
 يُشغَّل يدويًا عند تعديل الأيقونة فقط، من جذر المشروع، والملفات الناتجة تُحفظ في المستودع:
 
 ```
-java -cp "%USERPROFILE%\.m2\repository\com\github\MohamedSalah-13\app-icons\v0.2.0\app-icons-v0.2.0.jar" packaging\AppIcon.java .
+java -cp "%USERPROFILE%\.m2\repository\com\github\MohamedSalah-13\app-icons\v0.3.0\app-icons-v0.3.0.jar" packaging\AppIcon.java .
 ```
 
 الجار موجود في هذا المسار بعد أي بناء Maven للمشروع.
@@ -121,6 +122,36 @@ IconSet.of(icon)                                      // الأيقونة كام
 - العلامة نفسها تُعطى أيضًا كطبقة monochrome، وهي التي يلوّنها المشغّل ذو السمات بحسب شكلها فقط.
 - الاسم دائمًا `ic_launcher`، وهو ما يتوقعه Android و Flutter.
 
+### 4. الرسم من ملف SVG
+
+لتطبيق ويب أيقونته ملف SVG: الملف نفسه هو الرسم، وكل مقاس يُرسم منه مباشرة، بلا Playwright ولا متصفح.
+
+```java
+IconSet.of(SvgDrawing.of(Path.of("src/main/resources/static/icons/app.svg")))
+        .png("src/main/resources/static/icons/app-192.png", 192)
+        .png("src/main/resources/static/icons/app-512.png", 512)
+        .ico("src/main/resources/static/favicon.ico", 16, 32, 48)
+        .write(projectRoot);
+```
+
+- `SvgDrawing.of(String)` يأخذ نص SVG مباشرة، وهو المناسب حين تختلف الصيغ: أيقونة بزوايا مستديرة، وأخرى
+  maskable تملأ المربع كله، وثالثة لـ iOS. كل صيغة نص SVG و `IconSet` خاص بها.
+- يُفضَّل أن يحمل الملف `viewBox` مربعًا؛ ما يرسمه داخله يملأ الأيقونة في كل مقاس.
+- **هذا الجزء وحده يحتاج مكتبة أخرى**، تُضاف في مشروعك بجوار app-icons:
+
+```xml
+<dependency>
+    <groupId>com.github.weisj</groupId>
+    <artifactId>jsvg</artifactId>
+    <version>2.2.0</version>
+</dependency>
+```
+
+  ومع التشغيل بـ `java -cp` يُضاف جارها إلى المسار بجوار جار app-icons. من لا يستخدم `SvgDrawing` لا يحتاجها.
+- الناتج لا يطابق لقطة المتصفح بايت ببايت: محرّك الرسم مختلف، فتختلف بكسلات التنعيم على الحواف. في أيقونتين
+  حقيقيتين قورنتا بلقطات Chromium كان متوسط الفرق أقل من درجة لون واحدة من 255 في المقاسات 180 فأكبر، ونحو
+  ثلاث درجات في مقاس 32 حيث الحواف أغلب الصورة.
+
 ## ما الذي يُكتب
 
 | الملف | المقاسات | الصيغة |
@@ -137,4 +168,3 @@ IconSet.of(icon)                                      // الأيقونة كام
 ## ما ليس فيها بعد
 
 أيقونات PWA ‏(maskable و apple-touch) و iOS تُكتب اليوم بـ `png(path, size)` لكل ملف، ولا يوجد لها اختصار.
-ولا قراءة للرسم من ملف SVG.
