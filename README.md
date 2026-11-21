@@ -32,7 +32,7 @@
 <dependency>
     <groupId>com.github.MohamedSalah-13</groupId>
     <artifactId>app-icons</artifactId>
-    <version>v0.1.0</version>
+    <version>v0.2.0</version>
 </dependency>
 ```
 
@@ -77,7 +77,7 @@ public class AppIcon {
 يُشغَّل يدويًا عند تعديل الأيقونة فقط، من جذر المشروع، والملفات الناتجة تُحفظ في المستودع:
 
 ```
-java -cp "%USERPROFILE%\.m2\repository\com\github\MohamedSalah-13\app-icons\v0.1.0\app-icons-v0.1.0.jar" packaging\AppIcon.java .
+java -cp "%USERPROFILE%\.m2\repository\com\github\MohamedSalah-13\app-icons\v0.2.0\app-icons-v0.2.0.jar" packaging\AppIcon.java .
 ```
 
 الجار موجود في هذا المسار بعد أي بناء Maven للمشروع.
@@ -100,6 +100,27 @@ ICONS.largest();                      // أكبر صورة، لنافذة «حو
 `Main.class::getResourceAsStream` تُكتب في البرنامج نفسه، فتقرأ موارده حتى من وحدة (module) لا تفتح
 حزمة الصور. المقاس الذي لا يوجد ملفه يُسجَّل تحذيرًا ويُتجاوز، فلا يتعطل تشغيل البرنامج بسبب أيقونة.
 
+### 3. أيقونة تطبيق Android
+
+من الرسم نفسه، داخل مجلد `res` للتطبيق (تطبيق Flutter مثلًا):
+
+```java
+String res = "android/app/src/main/res";
+IconSet.of(icon)                                      // الأيقونة كاملة: العلامة على خلفيتها
+        .androidLauncher(res)                         // ما قبل Android 8
+        .androidAdaptive(res, mark, TOP, BOTTOM)      // Android 8 فأحدث
+        .write(appRoot);
+```
+
+- `androidLauncher` يكتب الأيقونة كاملة بمقاس 48dp في الكثافات الخمس: `mipmap-<density>/ic_launcher.png`.
+- `androidAdaptive` يكتب الأيقونة المتكيفة التي يقصّها المشغّل بشكله (دائرة أو مربع مستدير):
+  العلامة وحدها `mipmap-<density>/ic_launcher_foreground.png`، والخلفية `drawable/ic_launcher_background.xml`
+  (لون واحد، أو لونان من الأعلى إلى الأسفل)، والملف الذي يجمعهما `mipmap-anydpi-v26/ic_launcher.xml`.
+- `mark` رسم ثانٍ: **العلامة بلا خلفية** على مربع شفاف 108dp. المشغّل يعرض الوسط 72 وقد يقصّه إلى دائرة قطرها 66،
+  فتبقى العلامة داخل الـ 66 الوسطى. لو رُسمت الخلفية داخل الصورة لظهرت زواياها داخل القصّ.
+- العلامة نفسها تُعطى أيضًا كطبقة monochrome، وهي التي يلوّنها المشغّل ذو السمات بحسب شكلها فقط.
+- الاسم دائمًا `ic_launcher`، وهو ما يتوقعه Android و Flutter.
+
 ## ما الذي يُكتب
 
 | الملف | المقاسات | الصيغة |
@@ -115,5 +136,5 @@ ICONS.largest();                      // أكبر صورة، لنافذة «حو
 
 ## ما ليس فيها بعد
 
-أيقونات Android ‏(mipmap والأيقونة المتكيفة) وأيقونات PWA ‏(maskable و apple-touch) تُكتب اليوم بـ
-`png(path, size)` لكل ملف. لا يوجد لها اختصار، ولا قراءة للرسم من ملف SVG.
+أيقونات PWA ‏(maskable و apple-touch) و iOS تُكتب اليوم بـ `png(path, size)` لكل ملف، ولا يوجد لها اختصار.
+ولا قراءة للرسم من ملف SVG.

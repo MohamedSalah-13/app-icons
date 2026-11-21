@@ -1,6 +1,8 @@
 package com.hamza.icons;
 
+import java.awt.Color;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -21,6 +23,9 @@ import java.util.function.Supplier;
  *         .pngs("src/main/resources/img/icon-%d.png")       // the windows of the running program
  *         .write(projectRoot);
  * }</pre>
+ *
+ * An Android app's launcher icon is written the same way, into its {@code res} folder: see
+ * {@link #androidLauncher(String)} and {@link #androidAdaptive(String, IconDrawing, Color, Color)}.
  *
  * The files are meant to be committed; the program that draws them runs only when the icon changes.
  */
@@ -78,6 +83,55 @@ public final class IconSet {
         for (int size : some(sizes)) {
             png(pattern.replace(SIZE, Integer.toString(size)), size);
         }
+        return this;
+    }
+
+    /**
+     * An Android app's launcher icon as launchers before Android 8 show it: the whole picture, at 48 dp in each of
+     * the five densities, as {@code mipmap-<density>/ic_launcher.png}.
+     *
+     * @param res the app's resource folder: {@code android/app/src/main/res}
+     */
+    public IconSet androidLauncher(String res) {
+        Objects.requireNonNull(res, "res");
+        for (int density = 0; density < AndroidRes.DENSITIES.length; density++) {
+            png(AndroidRes.mipmap(res, density, AndroidRes.NAME + ".png"), AndroidRes.ICON_PIXELS[density]);
+        }
+        return this;
+    }
+
+    /** An adaptive icon on one colour; see {@link #androidAdaptive(String, IconDrawing, Color, Color)}. */
+    public IconSet androidAdaptive(String res, IconDrawing foreground, Color background) {
+        return androidAdaptive(res, foreground, background, background);
+    }
+
+    /**
+     * An Android app's adaptive icon, which Android 8 and later cut to the launcher's own shape: the mark alone as
+     * {@code mipmap-<density>/ic_launcher_foreground.png}, the colours behind it as
+     * {@code drawable/ic_launcher_background.xml}, and {@code mipmap-anydpi-v26/ic_launcher.xml} naming the two.
+     * The foreground is also given as the monochrome layer, which a themed launcher tints by its shape alone.
+     *
+     * <p>Call {@link #androidLauncher(String)} as well: older launchers, and this set's own drawing, need it.
+     *
+     * @param foreground the mark with no tile, on a transparent square of 108 dp. A launcher shows the middle 72
+     *                   and may cut that to a circle of 66, so the mark stays within the middle 66
+     * @param top        the background's colour at the top
+     * @param bottom     its colour at the bottom; the same colour for a plain background
+     */
+    public IconSet androidAdaptive(String res, IconDrawing foreground, Color top, Color bottom) {
+        Objects.requireNonNull(res, "res");
+        Objects.requireNonNull(foreground, "foreground");
+        Objects.requireNonNull(top, "top");
+        Objects.requireNonNull(bottom, "bottom");
+        for (int density = 0; density < AndroidRes.DENSITIES.length; density++) {
+            int pixels = AndroidRes.LAYER_PIXELS[density];
+            file(AndroidRes.mipmap(res, density, AndroidRes.NAME + "_foreground.png"),
+                    () -> Images.png(foreground.render(pixels)));
+        }
+        file(AndroidRes.path(res, "mipmap-anydpi-v26/" + AndroidRes.NAME + ".xml"),
+                () -> AndroidRes.adaptiveIcon().getBytes(StandardCharsets.UTF_8));
+        file(AndroidRes.path(res, "drawable/" + AndroidRes.NAME + "_background.xml"),
+                () -> AndroidRes.background(top, bottom).getBytes(StandardCharsets.UTF_8));
         return this;
     }
 
