@@ -15,6 +15,14 @@
 
 ```xml
 <repositories>
+    <!-- قبل JitPack دائمًا: انظر الملاحظة أسفل المقطع -->
+    <repository>
+        <id>central</id>
+        <url>https://repo.maven.apache.org/maven2</url>
+        <snapshots>
+            <enabled>false</enabled>
+        </snapshots>
+    </repository>
     <repository>
         <id>jitpack.io</id>
         <url>https://jitpack.io</url>
@@ -27,6 +35,11 @@
     <version>v0.1.0</version>
 </dependency>
 ```
+
+**لا تحذف `central` من المقطع.** مستودعات المشروع تُسأل قبل Maven Central الموروث، فلو ذُكر `jitpack.io` وحده
+لسأله Maven أولًا عن كل مكتبة في المشروع. و JitPack يردّ على بعض ما ليس عنده بملف فارغ بدل 404 (مثل
+`xml-apis:xml-apis-ext`)، فيُحفظ جار فارغ ويفشل البناء بـ `zip file is empty` على أي جهاز مستودعه المحلي فارغ،
+وأولها خادم CI. يعمل على جهازك لأن الجار السليم محفوظ عندك من قبل.
 
 مع `module-info.java` أضف: `requires com.hamza.icons;`
 
