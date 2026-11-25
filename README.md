@@ -12,13 +12,13 @@
 
 ## تحويل SVG من سطر الأوامر
 
-نزّل [ملف CLI للإصدار v0.6.0](https://github.com/MohamedSalah-13/app-icons/releases/download/v0.6.0/app-icons-0.6.0-cli.jar)، ثم شغّله باستخدام Java 21 فأحدث:
+نزّل [ملف CLI للإصدار v0.7.0](https://github.com/MohamedSalah-13/app-icons/releases/download/v0.7.0/app-icons-0.7.0-cli.jar)، ثم شغّله باستخدام Java 21 فأحدث:
 
 ```shell
-java -jar app-icons-0.6.0-cli.jar logo.svg output
+java -jar app-icons-0.7.0-cli.jar logo.svg output
 ```
 
-للبناء من المصدر، شغّل `mvn verify` من جذر المشروع. ستجد الملف في `target/app-icons-0.6.0-cli.jar`.
+للبناء من المصدر، شغّل `mvn verify` من جذر المشروع. ستجد الملف في `target/app-icons-0.7.0-cli.jar`.
 
 يحمل ملف الـCLI مكتبة JSVG معه. ينشئ الأمر داخل `output` ملفّي `app.ico` و`app.icns`،
 وصورة `app.png` بمقاس 512، وسبع صور داخل `png/` بأسماء مثل `icon-16.png` و`icon-256.png`.
@@ -29,7 +29,7 @@ java -jar app-icons-0.6.0-cli.jar logo.svg output
 بعد تنزيل ملف الـCLI، شغّل الأمر التالي لتوليد أيقونات الويب وملف الـmanifest في مجلد النشر.
 
 ```shell
-java -jar app-icons-0.6.0-cli.jar --pwa "My App.svg" public
+java -jar app-icons-0.7.0-cli.jar --pwa "My App.svg" public
 ```
 
 | المخرجات داخل `public` | الاستخدام |
@@ -53,10 +53,10 @@ java -jar app-icons-0.6.0-cli.jar --pwa "My App.svg" public
 
 ```shell
 # أيقونات سطح المكتب
-java -jar app-icons-0.6.0-cli.jar --check logo.svg output
+java -jar app-icons-0.7.0-cli.jar --check logo.svg output
 
 # أيقونات الويب وملف manifest.webmanifest
-java -jar app-icons-0.6.0-cli.jar --check --pwa "My App.svg" public
+java -jar app-icons-0.7.0-cli.jar --check --pwa "My App.svg" public
 ```
 
 يقارن `--check` محتوى كل ملف متوقع بايتًا ببايت، ويتجاهل الملفات الإضافية. يقرأ الملفات الموجودة
@@ -97,7 +97,7 @@ java -jar app-icons-0.6.0-cli.jar --check --pwa "My App.svg" public
 <dependency>
     <groupId>com.github.MohamedSalah-13</groupId>
     <artifactId>app-icons</artifactId>
-    <version>v0.6.0</version>
+    <version>v0.7.0</version>
 </dependency>
 ```
 
@@ -145,7 +145,7 @@ public class AppIcon {
 يُشغَّل يدويًا عند تعديل الأيقونة فقط، من جذر المشروع، والملفات الناتجة تُحفظ في المستودع:
 
 ```
-java -cp "%USERPROFILE%\.m2\repository\com\github\MohamedSalah-13\app-icons\v0.6.0\app-icons-v0.6.0.jar" packaging\AppIcon.java .
+java -cp "%USERPROFILE%\.m2\repository\com\github\MohamedSalah-13\app-icons\v0.7.0\app-icons-v0.7.0.jar" packaging\AppIcon.java .
 ```
 
 الجار موجود في هذا المسار بعد أي بناء Maven للمشروع.
@@ -208,7 +208,7 @@ IconSet.of(SvgDrawing.of(Path.of("src/main/resources/static/icons/app.svg")))
 - `SvgDrawing.of(String)` يأخذ نص SVG مباشرة، وهو المناسب حين تختلف الصيغ: أيقونة بزوايا مستديرة، وأخرى
   maskable تملأ المربع كله، وثالثة لـ iOS. كل صيغة نص SVG و `IconSet` خاص بها.
 - يُفضَّل أن يحمل الملف `viewBox` مربعًا؛ ما يرسمه داخله يملأ الأيقونة في كل مقاس.
-- في البناء من المصدر لهذا التحديث، تُقرأ الصور المشار إليها بمسار نسبي في `<image href="images/mark.png">`
+- تُقرأ الصور المشار إليها بمسار نسبي في `<image href="images/mark.png">`
   أو `xlink:href` من مجلد ملف SVG. احتفظ بالصور مع الرسم في Git حتى يجدها CI. إذا غابت صورة،
   يتوقف التوليد و`--check` برسالة تتضمن اسمها. ينطبق هذا على الـCLI و`SvgDrawing.of(Path)`.
 - **هذا الجزء وحده يحتاج مكتبة أخرى**، تُضاف في مشروعك بجوار app-icons:
