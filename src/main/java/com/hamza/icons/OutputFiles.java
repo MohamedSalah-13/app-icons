@@ -86,7 +86,7 @@ final class OutputFiles implements AutoCloseable {
         }
     }
 
-    private static Map<Path, Supplier<byte[]>> targetsUnder(Path base, Map<String, Supplier<byte[]>> files) {
+    static Map<Path, Supplier<byte[]>> targetsUnder(Path base, Map<String, Supplier<byte[]>> files) {
         Map<Path, Supplier<byte[]>> targets = new LinkedHashMap<>();
         for (var entry : files.entrySet()) {
             Path relative = base.getFileSystem().getPath(entry.getKey());

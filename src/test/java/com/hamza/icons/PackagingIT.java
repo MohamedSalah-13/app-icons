@@ -319,6 +319,63 @@ class PackagingIT {
     }
 
     @Test
+    void refusesToReplaceALinkedImageBeforeWritingAnyPwaFiles() throws Exception {
+        Path art = Files.createDirectory(folder.resolve("art"));
+        Path site = Files.createDirectory(folder.resolve("site"));
+        Path image = site.resolve("maskable-192.png");
+        ImageIO.write(new BufferedImage(2, 2, BufferedImage.TYPE_INT_ARGB), "png", image.toFile());
+        byte[] original = Files.readAllBytes(image);
+        Path sentinel = Files.writeString(site.resolve("icon-192.png"), "previous output");
+        Files.writeString(art.resolve("logo.svg"), """
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2 2">
+                  <image width="2" height="2" href="../site/maskable%2D192.png"/>
+                </svg>
+                """);
+        String jar = System.getProperty("cliJar");
+        String generate = run(1, "java", "-Djava.io.tmpdir=absent-temp", "-jar", jar, "--pwa", "art/logo.svg", "site");
+        String check = run(1, "java", "-jar", jar, "--check", "--pwa", "art/logo.svg", "site");
+        for (String message : List.of(generate, check)) {
+            assertTrue(message.contains("conflicts with input file") && message.contains("maskable-192.png"), message);
+        }
+        assertArrayEquals(original, Files.readAllBytes(image));
+        assertEquals("previous output", Files.readString(sentinel));
+        try (var files = Files.list(site)) {
+            assertEquals(Set.of(image, sentinel), Set.copyOf(files.toList()));
+        }
+        assertFalse(Files.exists(folder.resolve("absent-temp")));
+    }
+
+    @Test
+    void rejectsDesktopOutputThatAliasesTheSvgBeforeCreatingPngDirectory() throws Exception {
+        Path svg = Files.writeString(folder.resolve("logo.svg"), SVG);
+        Files.createLink(folder.resolve("app.png"), svg);
+        String message = run(1, "java", "-jar", System.getProperty("cliJar"), "logo.svg", ".");
+        assertTrue(message.contains("app.png") && message.contains("logo.svg"), message);
+        assertTrue(Files.isSameFile(svg, folder.resolve("app.png")));
+        assertEquals(SVG, Files.readString(svg));
+        assertFalse(Files.exists(folder.resolve("app.ico")));
+        assertFalse(Files.exists(folder.resolve("png")));
+    }
+
+    @Test
+    void protectsTheTemplateAgainstAllSelectedOutputs() throws Exception {
+        Files.writeString(folder.resolve("logo.svg"), SVG);
+        Path template = Files.writeString(folder.resolve("apple-touch-icon.png"), "{}");
+        String message = run(1, "java", "-jar", System.getProperty("cliJar"), "--pwa", "--preview",
+                "--manifest-template", template.toString(), "logo.svg", ".");
+        assertTrue(message.contains("conflicts with input file") && message.contains("apple-touch-icon.png"), message);
+        assertEquals("{}", Files.readString(template));
+        assertFalse(Files.exists(folder.resolve("preview.html")));
+        assertFalse(Files.exists(folder.resolve("icon-192.png")));
+
+        // The same directory is fine if the selected mode doesn't write the template's filename.
+        Files.move(template, folder.resolve("preview.html"));
+        run(0, "java", "-jar", System.getProperty("cliJar"), "--pwa", "--manifest-template", "preview.html",
+                "logo.svg", ".");
+        assertEquals("{}", Files.readString(folder.resolve("preview.html")));
+    }
+
+    @Test
     void pwaCheckMatchesAFreshGitCheckoutWithAutocrlf() throws Exception {
         String jar = System.getProperty("cliJar");
         Files.writeString(folder.resolve("logo.svg"), SVG);

@@ -186,6 +186,11 @@ public final class IconSet {
         }
     }
 
+    /** Lists the absolute output paths without rendering or creating any files. */
+    public List<Path> outputPaths(Path root) {
+        return List.copyOf(OutputFiles.targetsUnder(root.toAbsolutePath().normalize(), files).keySet());
+    }
+
     /** Writes the files under the current directory; see {@link #write(Path)}. */
     public List<Path> write() throws IOException {
         return write(Path.of(""));

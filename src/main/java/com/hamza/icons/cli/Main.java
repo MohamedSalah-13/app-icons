@@ -1,5 +1,6 @@
 package com.hamza.icons.cli;
 
+import com.hamza.icons.IconDrawing;
 import com.hamza.icons.IconSet;
 import com.hamza.icons.svg.SvgDrawing;
 
@@ -10,6 +11,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -50,19 +52,18 @@ public final class Main {
         try {
             Path input = options.input();
             Path output = options.output();
-            if (options.check()) {
-                // JSVG decodes linked images through ImageIO, which otherwise caches URL input on disk.
-                ImageIO.setUseCache(false);
+            // ImageIO would otherwise write a temporary cache while discovering linked images.
+            ImageIO.setUseCache(false);
+            Set<Path> inputs = new LinkedHashSet<>();
+            IconDrawing drawing = SvgDrawing.of(input, inputs::add);
+            IconSet icons = options.iconSet(drawing, null);
+            if (options.template() != null) {
+                inputs.add(options.template());
             }
-            IconSet icons = IconSet.of(SvgDrawing.of(input));
-            if (options.pwa()) {
-                String name = input.getFileName().toString().replaceFirst("(?i)\\.svg$", "").strip();
-                icons.pwa(name.isEmpty() ? "App" : name, options.background(), options.readTemplate());
-            } else if (!options.preview()) {
-                icons.ico("app.ico").icns("app.icns").png("app.png", 512).pngs("png/icon-%d.png");
-            }
-            if (options.preview()) {
-                icons.preview(options.background());
+            rejectInputOverwrites(icons.outputPaths(output), inputs);
+            if (options.template() != null) {
+                // A template changes the manifest contents, never the planned output paths.
+                icons = options.iconSet(drawing, Files.readString(options.template()));
             }
             if (options.check()) {
                 var differences = icons.check(output);
@@ -78,6 +79,19 @@ public final class Main {
         } catch (IOException | IllegalArgumentException e) {
             System.err.println("app-icons: " + e.getMessage());
             return 1;
+        }
+    }
+
+    private static void rejectInputOverwrites(List<Path> outputs, Set<Path> inputs) throws IOException {
+        for (Path output : outputs) {
+            if (Files.notExists(output)) {
+                continue;
+            }
+            for (Path input : inputs) {
+                if (Files.isSameFile(output, input)) {
+                    throw new IOException("Output " + output + " conflicts with input file " + input);
+                }
+            }
         }
     }
 
@@ -132,19 +146,18 @@ public final class Main {
             return args[index];
         }
 
-        String readTemplate() throws IOException {
-            if (template == null) {
-                return null;
+        IconSet iconSet(IconDrawing drawing, String manifestTemplate) {
+            IconSet icons = IconSet.of(drawing);
+            if (pwa) {
+                String name = input.getFileName().toString().replaceFirst("(?i)\\.svg$", "").strip();
+                icons.pwa(name.isEmpty() ? "App" : name, background, manifestTemplate);
+            } else if (!preview) {
+                icons.ico("app.ico").icns("app.icns").png("app.png", 512).pngs("png/icon-%d.png");
             }
-            Path manifest = output.resolve("manifest.webmanifest");
-            if (Files.exists(manifest) && Files.isSameFile(manifest, template)) {
-                throw new IllegalArgumentException("Use a separate template file from the output manifest: " + template);
+            if (preview) {
+                icons.preview(background);
             }
-            Path page = output.resolve("preview.html");
-            if (preview && Files.exists(page) && Files.isSameFile(page, template)) {
-                throw new IllegalArgumentException("Use a separate template file from the preview page: " + template);
-            }
-            return Files.readString(template);
+            return icons;
         }
     }
 }

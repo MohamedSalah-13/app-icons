@@ -14,6 +14,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Objects;
+import java.util.function.Consumer;
 
 /**
  * An icon that is kept as an SVG rather than drawn in code: the document is the drawing, and every size is drawn
@@ -36,8 +37,14 @@ public final class SvgDrawing {
 
     /** The picture an SVG file describes, including images referenced relative to that file. */
     public static IconDrawing of(Path file) throws IOException {
+        return of(file, path -> {});
+    }
+
+    /** Also reports the SVG and each local image it reads to the caller. */
+    public static IconDrawing of(Path file, Consumer<Path> inputFile) throws IOException {
         Objects.requireNonNull(file, "file");
-        var images = new LocalImages();
+        Objects.requireNonNull(inputFile, "inputFile").accept(file);
+        var images = new LocalImages(inputFile);
         try (InputStream in = Files.newInputStream(file)) {
             SVGDocument document = new SVGLoader().load(in, file.toUri(), images.context());
             images.checkForFailure();
