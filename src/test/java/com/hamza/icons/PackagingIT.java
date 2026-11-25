@@ -156,8 +156,8 @@ class PackagingIT {
                   "start_url": "./inbox",
                   "background_color": "#070809",
                   "icons": [{"src":"obsolete.png"}],
-                  "shortcuts": [{"name":"Inbox", "url":"./inbox", "icons":[{"src":"mail.png"}]}],
-                  "custom": {"values":[1, null, false]}
+                  "shortcuts": [{"name":"Inbox", "url":"./inbox", "icons":[{"src":"mail.png","extra":7}]}],
+                  "custom": {"name":7, "shortcuts":false, "values":[1, null, false]}
                 }
                 """;
         Files.writeString(template, source);
@@ -200,6 +200,25 @@ class PackagingIT {
         assertTrue(templateChanges.contains("DIFFERENT " + manifestPath));
         assertFalse(templateChanges.contains("maskable-192.png"));
         assertEquals(originalManifest, Files.readString(manifestPath));
+    }
+
+    @Test
+    void invalidTemplateFieldTypesFailGenerationAndCheckBeforeTouchingOutputs() throws Exception {
+        Files.writeString(folder.resolve("logo.svg"), SVG);
+        Files.writeString(folder.resolve("base.json"), """
+                {"shortcuts":[{"name":"Inbox", "url":7}]}
+                """);
+        Path out = Files.createDirectory(folder.resolve("public"));
+        Path manifest = Files.writeString(out.resolve("manifest.webmanifest"), "previous contents");
+        String jar = System.getProperty("cliJar");
+        String generate = run(1, "java", "-jar", jar, "--pwa", "--manifest-template", "base.json", "logo.svg", "public");
+        String check = run(1, "java", "-jar", jar, "--check", "--pwa", "--manifest-template", "base.json", "logo.svg", "public");
+        assertTrue(generate.contains("'shortcuts[0].url': expected string"), generate);
+        assertEquals(generate, check);
+        assertEquals("previous contents", Files.readString(manifest));
+        try (var files = Files.list(out)) {
+            assertEquals(List.of(manifest), files.toList());
+        }
     }
 
     @Test
