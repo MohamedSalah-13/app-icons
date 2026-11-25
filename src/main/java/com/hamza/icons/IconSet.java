@@ -8,6 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.StringJoiner;
 import java.util.function.Supplier;
 
 /**
@@ -139,6 +140,25 @@ public final class IconSet {
         file(AndroidRes.path(res, "drawable/" + AndroidRes.NAME + "_background.xml"),
                 () -> AndroidRes.background(top, bottom).getBytes(StandardCharsets.UTF_8));
         return this;
+    }
+
+    /** Adds web and maskable icons, an Apple touch icon, and a manifest rooted at the output directory. */
+    public IconSet pwa(String appName) {
+        Objects.requireNonNull(appName, "appName");
+        if (appName.isBlank()) {
+            throw new IllegalArgumentException("The manifest needs an application name");
+        }
+        StringJoiner entries = new StringJoiner(",\n    ");
+        for (int size : new int[]{192, 512}) {
+            String standard = "icon-" + size + ".png";
+            String maskable = "maskable-" + size + ".png";
+            png(standard, size);
+            file(maskable, () -> Pwa.opaquePng(drawing, size, Pwa.safeSquare(size)));
+            entries.add(Pwa.icon(standard, size, "any"));
+            entries.add(Pwa.icon(maskable, size, "maskable"));
+        }
+        file("apple-touch-icon.png", () -> Pwa.opaquePng(drawing, 180, 180));
+        return file("manifest.webmanifest", () -> Pwa.manifest(appName, entries.toString()));
     }
 
     /** Writes the files under the current directory; see {@link #write(Path)}. */

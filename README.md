@@ -24,6 +24,30 @@ java -jar app-icons-0.4.0-cli.jar logo.svg output
 وصورة `app.png` بمقاس 512، وسبع صور داخل `png/` بأسماء مثل `icon-16.png` و`icon-256.png`.
 يطبع مسار كل ملف بعد نجاح الكتابة. يعرض الخيار `--help` طريقة الاستخدام.
 
+### أيقونات PWA
+
+الخيار `--pwa` متاح عند البناء من المصدر باستخدام Java 21 فأحدث. لتوليد ملفات الويب في مجلد النشر:
+
+```shell
+mvn verify
+java -jar target/app-icons-0.4.0-cli.jar --pwa "My App.svg" public
+```
+
+| المخرجات داخل `public` | الاستخدام |
+|---|---|
+| `icon-192.png` و`icon-512.png` | أيقونتان بالشفافية الأصلية |
+| `maskable-192.png` و`maskable-512.png` | خلفية بيضاء معتمة والشعار بالكامل داخل دائرة القص الآمنة |
+| `apple-touch-icon.png` | أيقونة شاشة iOS الرئيسية بمقاس 180×180 وخلفية بيضاء |
+| `manifest.webmanifest` | اسم التطبيق من اسم ملف SVG، ووضع العرض `standalone`، ومسارات نسبية للأيقونات |
+
+ضع الملفات بجوار صفحة بدء التطبيق. يشير `start_url` و`scope` إلى مجلد الـmanifest نفسه (`./`)،
+فيدعم النشر تحت مسار فرعي. أضف الوسمين التاليين داخل `<head>` في صفحة البدء:
+
+```html
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
+```
+
 ## الاستخدام
 
 `pom.xml`:
@@ -185,7 +209,3 @@ IconSet.of(SvgDrawing.of(Path.of("src/main/resources/static/icons/app.svg")))
 - المقاسات الأصغر من 256 تُخزَّن Bitmap لأن كل أداة تتعامل مع الأيقونات تقرؤها (Inno Setup ومترجم
   الموارد منها)، بينما PNG داخل `.ico` لا يضمنه إلا Windows نفسه. لذلك الملف أكبر: نحو 150 كيلوبايت.
 - لمن يحتاج تحكمًا أدق: `Ico.encode(frames, pngFrom)` و `Icns.encode(drawing)` يعيدان البايتات مباشرة.
-
-## ما ليس فيها بعد
-
-أيقونات PWA ‏(maskable و apple-touch) و iOS تُكتب اليوم بـ `png(path, size)` لكل ملف، ولا يوجد لها اختصار.

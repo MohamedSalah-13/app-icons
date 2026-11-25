@@ -1,6 +1,9 @@
 package com.hamza.icons;
 
 import com.github.weisj.jsvg.parser.SVGLoader;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonObject;
+import com.google.gson.Strictness;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -10,7 +13,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -85,9 +90,70 @@ class PackagingIT {
     }
 
     @Test
+    void standaloneCliWritesPwaIconsReferencedByAValidManifest() throws Exception {
+        Files.writeString(folder.resolve("My App.SVG"), SVG);
+        run(0, "java", "-jar", System.getProperty("cliJar"), "--pwa", "My App.SVG", "web assets");
+        Path out = folder.resolve("web assets");
+        var json = new GsonBuilder().setStrictness(Strictness.STRICT).create();
+        var manifest = json.fromJson(Files.readString(out.resolve("manifest.webmanifest")), JsonObject.class);
+        assertEquals("My App", manifest.get("name").getAsString());
+        assertEquals("My App", manifest.get("short_name").getAsString());
+        assertEquals("./", manifest.get("start_url").getAsString());
+        assertEquals("./", manifest.get("scope").getAsString());
+        assertEquals("standalone", manifest.get("display").getAsString());
+        Set<String> expected = new HashSet<>(Set.of("any-192", "any-512", "maskable-192", "maskable-512"));
+        for (var entry : manifest.getAsJsonArray("icons")) {
+            var icon = entry.getAsJsonObject();
+            String purpose = icon.get("purpose").getAsString();
+            String src = icon.get("src").getAsString();
+            assertFalse(Path.of(src).isAbsolute());
+            var image = ImageIO.read(out.resolve(src).toFile());
+            int size = image.getWidth();
+            assertEquals(size, image.getHeight());
+            assertEquals(size + "x" + size, icon.get("sizes").getAsString());
+            assertEquals("image/png", icon.get("type").getAsString());
+            assertTrue(expected.remove(purpose + "-" + size));
+            assertEquals(0xffff0000, image.getRGB(size / 3, size / 2));
+            if (purpose.equals("maskable")) {
+                assertFalse(image.getColorModel().hasAlpha());
+                // The red mark must survive every supported mask, even near the square's corners.
+                for (int y = 0; y < size; y++) {
+                    for (int x = 0; x < size; x++) {
+                        if (Math.hypot(x + 0.5 - size / 2.0, y + 0.5 - size / 2.0) > size * 0.4) {
+                            assertEquals(0xffffffff, image.getRGB(x, y));
+                        }
+                    }
+                }
+            } else {
+                assertEquals(0xffff0000, image.getRGB(0, 0));
+                assertEquals(0, image.getRGB(size - 1, 0));
+            }
+        }
+        assertTrue(expected.isEmpty());
+        var apple = ImageIO.read(out.resolve("apple-touch-icon.png").toFile());
+        assertEquals(180, apple.getWidth());
+        assertEquals(180, apple.getHeight());
+        assertEquals(0xffff0000, apple.getRGB(0, 0));
+        assertEquals(0xffffffff, apple.getRGB(179, 0));
+        assertFalse(Files.exists(out.resolve("app.ico")));
+    }
+
+    @Test
+    void pwaFailureLeavesExistingOutputsIntact() throws Exception {
+        Files.writeString(folder.resolve("logo.svg"), SVG);
+        Path out = Files.createDirectory(folder.resolve("site"));
+        Files.createDirectory(out.resolve("manifest.webmanifest"));
+        Path oldIcon = Files.writeString(out.resolve("icon-192.png"), "previous");
+        run(1, "java", "-jar", System.getProperty("cliJar"), "--pwa", "logo.svg", "site");
+        assertEquals("previous", Files.readString(oldIcon));
+        assertFalse(Files.exists(out.resolve("apple-touch-icon.png")));
+    }
+
+    @Test
     void standaloneCliReportsHelpAndErrors() throws Exception {
         String jar = System.getProperty("cliJar");
-        assertTrue(run(0, "java", "-jar", jar, "--help").contains("Usage"));
+        assertTrue(run(0, "java", "-jar", jar, "--help").contains("--pwa"));
+        assertTrue(run(2, "java", "-jar", jar, "--pwa", "input.svg").contains("Usage"));
         assertTrue(run(2, "java", "-jar", jar).contains("Usage"));
         Files.writeString(folder.resolve("invalid.svg"), "invalid");
         assertTrue(run(1, "java", "-jar", jar, "invalid.svg", "icons").contains("app-icons:"));
