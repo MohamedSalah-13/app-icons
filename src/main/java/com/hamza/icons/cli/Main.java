@@ -15,8 +15,8 @@ import java.util.Set;
 
 /** Command-line entry point for the standalone CLI jar. */
 public final class Main {
-    private static final String USAGE = "Usage: java -jar app-icons-<version>-cli.jar [--check] "
-            + "[--pwa [--manifest-template <file>] [--background-color <#RRGGBB>]] <input.svg> <output-directory>";
+    private static final String USAGE = "Usage: java -jar app-icons-<version>-cli.jar [--check] [--preview] "
+            + "[--pwa [--manifest-template <file>]] [--background-color <#RRGGBB>] <input.svg> <output-directory>";
 
     private Main() {
     }
@@ -33,6 +33,7 @@ public final class Main {
             System.out.println(USAGE);
             System.out.println("Writes app.ico, app.icns, app.png (512px) and png/icon-<size>.png.");
             System.out.println("--pwa writes web icons, maskable icons, apple-touch-icon.png and manifest.webmanifest.");
+            System.out.println("--preview writes a self-contained preview.html. Combine with --pwa to also write web icons.");
             System.out.println("--manifest-template preserves custom manifest fields and replaces the top-level icons array.");
             System.out.println("--background-color fills maskable and Apple touch icons (default: #ffffff).");
             System.out.println("--check compares expected files without writing. Exit 0 for a match, 1 for differences or errors.");
@@ -57,8 +58,11 @@ public final class Main {
             if (options.pwa()) {
                 String name = input.getFileName().toString().replaceFirst("(?i)\\.svg$", "").strip();
                 icons.pwa(name.isEmpty() ? "App" : name, options.background(), options.readTemplate());
-            } else {
+            } else if (!options.preview()) {
                 icons.ico("app.ico").icns("app.icns").png("app.png", 512).pngs("png/icon-%d.png");
+            }
+            if (options.preview()) {
+                icons.preview(options.background());
             }
             if (options.check()) {
                 var differences = icons.check(output);
@@ -77,7 +81,8 @@ public final class Main {
         }
     }
 
-    private record Options(Path input, Path output, boolean pwa, boolean check, Path template, Color background) {
+    private record Options(Path input, Path output, boolean pwa, boolean check, boolean preview,
+                           Path template, Color background) {
         static Options parse(String[] args) {
             List<String> paths = new ArrayList<>(2);
             Set<String> flags = new HashSet<>();
@@ -93,7 +98,7 @@ public final class Main {
                     throw new IllegalArgumentException("Repeated option: " + arg);
                 }
                 switch (arg) {
-                    case "--pwa", "--check" -> { }
+                    case "--pwa", "--check", "--preview" -> { }
                     case "--manifest-template" -> template = Path.of(value(args, ++i, arg));
                     case "--background-color" -> {
                         String color = value(args, ++i, arg);
@@ -106,13 +111,17 @@ public final class Main {
                 }
             }
             boolean pwa = flags.contains("--pwa");
-            if (!pwa && (template != null || flags.contains("--background-color"))) {
-                throw new IllegalArgumentException("Manifest templates and icon backgrounds require --pwa");
+            boolean preview = flags.contains("--preview");
+            if (!pwa && template != null) {
+                throw new IllegalArgumentException("Manifest templates require --pwa");
+            }
+            if (!pwa && !preview && flags.contains("--background-color")) {
+                throw new IllegalArgumentException("Icon backgrounds require --pwa or --preview");
             }
             if (paths.size() != 2) {
                 throw new IllegalArgumentException("Expected the SVG path and output directory");
             }
-            return new Options(Path.of(paths.get(0)), Path.of(paths.get(1)), pwa, flags.contains("--check"),
+            return new Options(Path.of(paths.get(0)), Path.of(paths.get(1)), pwa, flags.contains("--check"), preview,
                     template, background);
         }
 
@@ -130,6 +139,10 @@ public final class Main {
             Path manifest = output.resolve("manifest.webmanifest");
             if (Files.exists(manifest) && Files.isSameFile(manifest, template)) {
                 throw new IllegalArgumentException("Use a separate template file from the output manifest: " + template);
+            }
+            Path page = output.resolve("preview.html");
+            if (preview && Files.exists(page) && Files.isSameFile(page, template)) {
+                throw new IllegalArgumentException("Use a separate template file from the preview page: " + template);
             }
             return Files.readString(template);
         }

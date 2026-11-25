@@ -9,13 +9,18 @@ final class Pwa {
     private Pwa() {
     }
 
-    static int safeSquare(int size) {
+    static byte[] maskablePng(IconDrawing drawing, int size, Color background) {
         // Fit the entire square drawing inside the maskable safe circle (diameter = 80%).
         // An even side centers the mark on whole pixels in our even-sized output.
-        return 2 * (int) Math.floor(0.4 * size / Math.sqrt(2));
+        int safeSide = 2 * (int) Math.floor(0.4 * size / Math.sqrt(2));
+        return opaquePng(drawing, size, safeSide, background);
     }
 
-    static byte[] opaquePng(IconDrawing drawing, int size, int markSize, Color background) {
+    static byte[] appleTouchPng(IconDrawing drawing, Color background) {
+        return opaquePng(drawing, 180, 180, background);
+    }
+
+    private static byte[] opaquePng(IconDrawing drawing, int size, int markSize, Color background) {
         BufferedImage image = new BufferedImage(size, size, BufferedImage.TYPE_INT_RGB);
         Graphics2D g = image.createGraphics();
         try {

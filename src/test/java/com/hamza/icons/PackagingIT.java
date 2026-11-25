@@ -8,13 +8,17 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import javax.imageio.ImageIO;
+import javax.xml.parsers.DocumentBuilderFactory;
+import org.w3c.dom.Element;
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -335,6 +339,64 @@ class PackagingIT {
         run(1, "java", "-jar", System.getProperty("cliJar"), "--pwa", "logo.svg", "site");
         assertEquals("previous", Files.readString(oldIcon));
         assertFalse(Files.exists(out.resolve("apple-touch-icon.png")));
+    }
+
+    @Test
+    void previewPageEmbedsActualSizeIconsAndBothCropsFromThePwaSet() throws Exception {
+        String jar = System.getProperty("cliJar");
+        Files.writeString(folder.resolve("logo.svg"), SVG);
+        Path out = folder.resolve("preview");
+        run(0, "java", "-jar", jar, "--preview", "--background-color", "#17324d", "logo.svg", "preview");
+        Path page = out.resolve("preview.html");
+        try (var files = Files.list(out)) {
+            assertEquals(List.of(page), files.toList());
+        }
+        run(0, "java", "-jar", jar, "--check", "--preview", "--background-color", "#17324d", "logo.svg", "preview");
+        byte[] standalone = Files.readAllBytes(page);
+        run(0, "java", "-jar", jar, "--preview", "--pwa", "--background-color", "#17324d", "logo.svg", "preview");
+        assertArrayEquals(standalone, Files.readAllBytes(page));
+        assertTrue(Files.exists(out.resolve("manifest.webmanifest")));
+        var document = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(page.toFile());
+        var images = document.getElementsByTagName("img");
+        assertEquals(5, images.getLength());
+        List<Integer> sizes = List.of(16, 32, 180, 192, 192);
+        for (int i = 0; i < images.getLength(); i++) {
+            Element element = (Element) images.item(i);
+            int size = sizes.get(i);
+            assertEquals(String.valueOf(size), element.getAttribute("width"));
+            assertEquals(String.valueOf(size), element.getAttribute("height"));
+            String src = element.getAttribute("src");
+            String prefix = "data:image/png;base64,";
+            assertTrue(src.startsWith(prefix));
+            byte[] png = Base64.getDecoder().decode(src.substring(prefix.length()));
+            var image = ImageIO.read(new ByteArrayInputStream(png));
+            assertEquals(size, image.getWidth());
+            assertEquals(size, image.getHeight());
+            if (size <= 32) {
+                assertEquals(0xffff0000, image.getRGB(0, 0));
+                assertEquals(0, image.getRGB(size - 1, 0));
+            } else {
+                String asset = size == 180 ? "apple-touch-icon.png" : "maskable-192.png";
+                assertArrayEquals(Files.readAllBytes(out.resolve(asset)), png);
+                assertEquals(0xff17324d, image.getRGB(size - 1, 0));
+            }
+        }
+        assertEquals("circle", ((Element) images.item(3)).getAttribute("class"));
+        assertEquals("rounded-square", ((Element) images.item(4)).getAttribute("class"));
+    }
+
+    @Test
+    void checkReportsAnOutdatedOrMissingPreviewWithoutRewritingIt() throws Exception {
+        String jar = System.getProperty("cliJar");
+        Files.writeString(folder.resolve("logo.svg"), SVG);
+        Path page = folder.resolve("out/preview.html");
+        assertTrue(run(1, "java", "-jar", jar, "--check", "--preview", "logo.svg", "out").contains("MISSING " + page));
+        assertFalse(Files.exists(page.getParent()));
+        run(0, "java", "-jar", jar, "--preview", "logo.svg", "out");
+        byte[] original = Files.readAllBytes(page);
+        assertTrue(run(1, "java", "-jar", jar, "--check", "--preview", "--background-color", "#222222",
+                "logo.svg", "out").contains("DIFFERENT " + page));
+        assertArrayEquals(original, Files.readAllBytes(page));
     }
 
     @Test

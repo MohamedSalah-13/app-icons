@@ -74,6 +74,20 @@ java -jar app-icons-0.8.0-cli.jar --check --pwa --manifest-template config/app.w
 اللون الافتراضي أبيض، وتحتفظ الأيقونات العادية بالشفافية الأصلية. إذا حدّد القالب `background_color`
 تُحفظ قيمته في الـmanifest، وإلا يكتب المولّد لون خلفية الأيقونات في هذا الحقل.
 
+### معاينة الأيقونة محليًا
+
+في النسخة المبنية من المصدر، يولّد `--preview` ملف `preview.html` داخل مجلد الإخراج:
+
+```shell
+mvn verify
+java -jar target/app-icons-0.8.0-cli.jar --preview logo.svg output
+```
+
+افتح `output/preview.html` مباشرة في المتصفح. الصور مضمّنة في الصفحة، وتظهر الأيقونة الصغيرة
+بمقاسي 16 و32 بكسل، ونسخة Apple touch بمقاس 180، وأيقونة maskable بمقاس 192 بقصّ دائري وآخر مربع مستدير.
+يولّد `--preview` بمفرده صفحة المعاينة فقط. أضف `--pwa` لكتابة ملفات الويب معها،
+أو `--background-color "#17324d"` لمعاينة لون الخلفية. يقارن `--check --preview` الصفحة بالمحتوى المتوقع.
+
 ### فحص الملفات في CI
 
 استخدم ملف الـCLI المنزّل لفحص المخرجات المحفوظة في مشروعك.
@@ -96,6 +110,7 @@ java -jar app-icons-0.8.0-cli.jar --check --pwa "My App.svg" public
 
 ```gitattributes
 *.webmanifest text eol=lf
+preview.html text eol=lf
 ```
 
 لو كان الملف متتبّعًا قبل إضافة القاعدة، شغّل `git add --renormalize -- public/manifest.webmanifest`

@@ -157,23 +157,33 @@ public final class IconSet {
         if (appName.isBlank()) {
             throw new IllegalArgumentException("The manifest needs an application name");
         }
-        if (Objects.requireNonNull(background, "background").getAlpha() != 255) {
-            throw new IllegalArgumentException("The PWA icon background must be opaque");
-        }
+        checkOpaqueBackground(background);
         PwaTemplate template = manifestTemplate == null ? null : new PwaTemplate(manifestTemplate);
         StringJoiner entries = new StringJoiner(",\n    ");
         for (int size : new int[]{192, 512}) {
             String standard = "icon-" + size + ".png";
             String maskable = "maskable-" + size + ".png";
             png(standard, size);
-            file(maskable, () -> Pwa.opaquePng(drawing, size, Pwa.safeSquare(size), background));
+            file(maskable, () -> Pwa.maskablePng(drawing, size, background));
             entries.add(Pwa.icon(standard, size, "any"));
             entries.add(Pwa.icon(maskable, size, "maskable"));
         }
         String defaults = Pwa.manifest(appName, entries.toString(), background);
         String manifest = template == null ? defaults : template.merge(defaults);
-        file("apple-touch-icon.png", () -> Pwa.opaquePng(drawing, 180, 180, background));
+        file("apple-touch-icon.png", () -> Pwa.appleTouchPng(drawing, background));
         return file("manifest.webmanifest", () -> manifest.getBytes(StandardCharsets.UTF_8));
+    }
+
+    /** Adds a standalone HTML preview with the small, Apple touch and masked launcher icons. */
+    public IconSet preview(Color background) {
+        checkOpaqueBackground(background);
+        return file("preview.html", () -> IconPreview.html(drawing, background));
+    }
+
+    private static void checkOpaqueBackground(Color background) {
+        if (Objects.requireNonNull(background, "background").getAlpha() != 255) {
+            throw new IllegalArgumentException("The PWA icon background must be opaque");
+        }
     }
 
     /** Writes the files under the current directory; see {@link #write(Path)}. */
