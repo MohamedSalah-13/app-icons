@@ -3,6 +3,7 @@ package com.hamza.icons.cli;
 import com.hamza.icons.IconSet;
 import com.hamza.icons.svg.SvgDrawing;
 
+import javax.imageio.ImageIO;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -52,6 +53,10 @@ public final class Main {
         try {
             Path input = Path.of(paths.get(0));
             Path output = Path.of(paths.get(1));
+            if (check) {
+                // JSVG decodes linked images through ImageIO, which otherwise caches URL input on disk.
+                ImageIO.setUseCache(false);
+            }
             IconSet icons = IconSet.of(SvgDrawing.of(input));
             if (pwa) {
                 String name = input.getFileName().toString().replaceFirst("(?i)\\.svg$", "").strip();

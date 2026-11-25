@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -195,6 +196,52 @@ class PackagingIT {
     }
 
     @Test
+    void generationAndCheckResolveLinkedImagesBesideTheSvg() throws Exception {
+        Path assets = Files.createDirectories(folder.resolve("art/images"));
+        Path png = assets.resolve("brand mark.png");
+        BufferedImage mark = new BufferedImage(1, 1, BufferedImage.TYPE_INT_RGB);
+        mark.setRGB(0, 0, 0xffff0000);
+        ImageIO.write(mark, "png", png.toFile());
+        String svg = """
+                <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 2 1">
+                  <image width="1" height="1" href="images/brand%20mark.png"/>
+                  <image x="1" width="1" height="1" xlink:href="images/brand mark.png"/>
+                </svg>
+                """;
+        Files.writeString(folder.resolve("art/logo.svg"), svg);
+        String jar = System.getProperty("cliJar");
+        run(0, "java", "-jar", jar, "--pwa", "art/logo.svg", "site");
+        Path output = folder.resolve("site/icon-192.png");
+        var image = ImageIO.read(output.toFile());
+        assertEquals(0xffff0000, image.getRGB(48, 96));
+        assertEquals(0xffff0000, image.getRGB(144, 96));
+        run(0, "java", "-Djava.io.tmpdir=absent-temp", "-jar", jar, "--check", "--pwa", "art/logo.svg", "site");
+        assertFalse(Files.exists(folder.resolve("absent-temp")));
+        mark.setRGB(0, 0, 0xff0000ff);
+        ImageIO.write(mark, "png", png.toFile());
+        assertTrue(run(1, "java", "-jar", jar, "--check", "--pwa", "art/logo.svg", "site").contains("DIFFERENT"));
+
+        byte[] previous = Files.readAllBytes(output);
+        Files.delete(png);
+        assertTrue(run(1, "java", "-jar", jar, "--pwa", "art/logo.svg", "site").contains("brand mark.png"));
+        assertArrayEquals(previous, Files.readAllBytes(output));
+        assertTrue(run(1, "java", "-jar", jar, "--check", "art/logo.svg", "absent").contains("brand mark.png"));
+        assertFalse(Files.exists(folder.resolve("absent")));
+    }
+
+    @Test
+    void pwaCheckMatchesAFreshGitCheckoutWithAutocrlf() throws Exception {
+        String jar = System.getProperty("cliJar");
+        Files.writeString(folder.resolve("logo.svg"), SVG);
+        Files.writeString(folder.resolve(".gitattributes"), "*.webmanifest text eol=lf\n");
+        run(0, "java", "-jar", jar, "--pwa", "logo.svg", "public");
+        run(0, "git", "init", "--quiet");
+        run(0, "git", "-c", "core.autocrlf=true", "add", "--", ".gitattributes", "logo.svg", "public");
+        run(0, "git", "-c", "core.autocrlf=true", "checkout-index", "--all", "--prefix=checkout/");
+        run(0, "java", "-jar", jar, "--check", "--pwa", "checkout/logo.svg", "checkout/public");
+    }
+
+    @Test
     void pwaFailureLeavesExistingOutputsIntact() throws Exception {
         Files.writeString(folder.resolve("logo.svg"), SVG);
         Path out = Files.createDirectory(folder.resolve("site"));
@@ -218,7 +265,7 @@ class PackagingIT {
 
     private String run(int expected, String tool, String... args) throws Exception {
         List<String> command = new ArrayList<>();
-        command.add(Path.of(System.getProperty("java.home"), "bin", tool).toString());
+        command.add(tool.equals("git") ? "git" : Path.of(System.getProperty("java.home"), "bin", tool).toString());
         command.addAll(List.of(args));
         Process process = new ProcessBuilder(command).directory(folder.toFile()).redirectErrorStream(true).start();
         String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);

@@ -9,6 +9,7 @@ import com.hamza.icons.IconDrawing;
 import java.awt.Component;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -33,10 +34,18 @@ public final class SvgDrawing {
     private SvgDrawing() {
     }
 
-    /** The picture an SVG file describes, fitted to the icon's square. */
+    /** The picture an SVG file describes, including images referenced relative to that file. */
     public static IconDrawing of(Path file) throws IOException {
         Objects.requireNonNull(file, "file");
-        return of(Files.readString(file, StandardCharsets.UTF_8));
+        var images = new LocalImages();
+        try (InputStream in = Files.newInputStream(file)) {
+            SVGDocument document = new SVGLoader().load(in, file.toUri(), images.context());
+            images.checkForFailure();
+            if (document == null) {
+                throw new IllegalArgumentException("Not an SVG that can be read: " + file);
+            }
+            return drawing(document);
+        }
     }
 
     /**
@@ -52,6 +61,10 @@ public final class SvgDrawing {
         if (document == null) {
             throw new IllegalArgumentException("Not an SVG that can be read: " + abbreviated(svg));
         }
+        return drawing(document);
+    }
+
+    private static IconDrawing drawing(SVGDocument document) {
         return (g, size) -> document.render((Component) null, g, new ViewBox(0, 0, size, size));
     }
 

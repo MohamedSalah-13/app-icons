@@ -64,6 +64,16 @@ java -jar app-icons-0.6.0-cli.jar --check --pwa "My App.svg" public
 كود الخروج `0` يعني التطابق. عند وجود فروق يطبع `MISSING` أو `DIFFERENT` مع مسار كل ملف ويخرج
 بالكود `1`. أخطاء القراءة أو الرسم تفشل أيضًا بالكود `1`، وصيغة الأمر غير الصحيحة ترجع `2`.
 
+في المستودع الذي تحفظ فيه ملفات التطبيق، أضف هذا السطر إلى `.gitattributes` حتى يظل
+الـmanifest بنهايات أسطر LF بعد Git checkout على Windows وLinux، بما في ذلك عند تفعيل `core.autocrlf=true`.
+
+```gitattributes
+*.webmanifest text eol=lf
+```
+
+لو كان الملف متتبّعًا قبل إضافة القاعدة، شغّل `git add --renormalize -- public/manifest.webmanifest`
+بمسار الملف في مشروعك، ثم احفظ التغيير مع `.gitattributes` في نفس الـcommit.
+
 ## الاستخدام
 
 `pom.xml`:
@@ -198,6 +208,9 @@ IconSet.of(SvgDrawing.of(Path.of("src/main/resources/static/icons/app.svg")))
 - `SvgDrawing.of(String)` يأخذ نص SVG مباشرة، وهو المناسب حين تختلف الصيغ: أيقونة بزوايا مستديرة، وأخرى
   maskable تملأ المربع كله، وثالثة لـ iOS. كل صيغة نص SVG و `IconSet` خاص بها.
 - يُفضَّل أن يحمل الملف `viewBox` مربعًا؛ ما يرسمه داخله يملأ الأيقونة في كل مقاس.
+- في البناء من المصدر لهذا التحديث، تُقرأ الصور المشار إليها بمسار نسبي في `<image href="images/mark.png">`
+  أو `xlink:href` من مجلد ملف SVG. احتفظ بالصور مع الرسم في Git حتى يجدها CI. إذا غابت صورة،
+  يتوقف التوليد و`--check` برسالة تتضمن اسمها. ينطبق هذا على الـCLI و`SvgDrawing.of(Path)`.
 - **هذا الجزء وحده يحتاج مكتبة أخرى**، تُضاف في مشروعك بجوار app-icons:
 
 ```xml
