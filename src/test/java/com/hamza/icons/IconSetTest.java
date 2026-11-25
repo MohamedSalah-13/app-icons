@@ -2,10 +2,13 @@ package com.hamza.icons;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.file.Files;
@@ -14,6 +17,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -71,6 +75,61 @@ class IconSetTest {
         IconSet.of(TestIcon.DRAWING).png("app.png", 32).write(root);
 
         assertEquals(32, ImageIO.read(root.resolve("app.png").toFile()).getWidth());
+    }
+
+    @Test
+    void renderFailureKeepsOriginalFilesAndDiscardsStagedOutputs() throws IOException {
+        Path original = root.resolve("old.png");
+        Files.writeString(original, "original");
+        IconDrawing failsAt32 = (g, size) -> {
+            if (size == 32) {
+                throw new IllegalStateException("drawing failed");
+            }
+        };
+        IconSet set = IconSet.of(failsAt32).png("old.png", 16).png("new.png", 16).png("last.png", 32);
+        assertThrows(IllegalStateException.class, () -> set.write(root));
+        assertEquals("original", Files.readString(original));
+        try (var files = Files.list(root)) {
+            assertEquals(List.of(original), files.toList());
+        }
+    }
+
+    @Test
+    void refusesEscapingPathsAndDirectoryTargetsBeforeReplacingFiles() throws IOException {
+        Files.writeString(root.resolve("old.png"), "original");
+        IconSet set = IconSet.of(TestIcon.DRAWING).png("old.png", 16);
+        assertThrows(IllegalArgumentException.class, () -> set.png("../outside.png", 16).write(root));
+        assertThrows(IllegalArgumentException.class,
+                () -> IconSet.of(TestIcon.DRAWING).png(root.resolve("absolute.png").toString(), 16).write(root));
+        Files.createDirectory(root.resolve("folder"));
+        assertThrows(IOException.class,
+                () -> IconSet.of(TestIcon.DRAWING).png("old.png", 16).png("folder", 16).write(root));
+        assertEquals("original", Files.readString(root.resolve("old.png")));
+    }
+
+    @Test
+    void rejectsAFileThatWouldAlsoBeAnOutputDirectory() {
+        IconSet set = IconSet.of(TestIcon.DRAWING).png("icons/small.png", 16).png("icons", 32);
+        assertThrows(IllegalArgumentException.class, () -> set.write(root));
+        assertFalse(Files.exists(root.resolve("icons")));
+    }
+
+    @Test
+    @EnabledOnOs(OS.WINDOWS)
+    void restoresAlreadyReplacedFilesWhenWindowsDeniesTheLastRename() throws IOException {
+        Path old = Files.writeString(root.resolve("old.png"), "old");
+        Path locked = Files.writeString(root.resolve("locked.png"), "locked");
+        // RandomAccessFile shares reads and writes on Windows, but does not share deletes/renames.
+        try (var handle = new RandomAccessFile(locked.toFile(), "r")) {
+            IconSet set = IconSet.of(TestIcon.DRAWING).png("old.png", 16).png("new.png", 16).png("locked.png", 16);
+            assertThrows(IOException.class, () -> set.write(root));
+            assertEquals("old", Files.readString(old));
+            assertFalse(Files.exists(root.resolve("new.png")));
+            assertEquals("locked", Files.readString(locked));
+        }
+        try (var files = Files.list(root)) {
+            assertEquals(2, files.count());
+        }
     }
 
     @Test

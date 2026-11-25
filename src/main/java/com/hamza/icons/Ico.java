@@ -22,7 +22,21 @@ public final class Ico {
     /** The drawing at each of the sizes, in the order given. */
     public static byte[] encode(IconDrawing drawing, int... sizes) {
         Objects.requireNonNull(drawing, "drawing");
-        List<BufferedImage> frames = new ArrayList<>();
+        return renderFrames(drawing, checkedSizes(sizes));
+    }
+
+    static int[] checkedSizes(int[] sizes) {
+        Objects.requireNonNull(sizes, "sizes");
+        checkFrameCount(sizes.length);
+        int[] chosen = sizes.clone();
+        for (int size : chosen) {
+            checkSide(size);
+        }
+        return chosen;
+    }
+
+    static byte[] renderFrames(IconDrawing drawing, int[] sizes) {
+        List<BufferedImage> frames = new ArrayList<>(sizes.length);
         for (int size : sizes) {
             frames.add(drawing.render(size));
         }
@@ -44,12 +58,7 @@ public final class Ico {
      */
     public static byte[] encode(List<BufferedImage> frames, int pngFrom) {
         Objects.requireNonNull(frames, "frames");
-        if (frames.isEmpty()) {
-            throw new IllegalArgumentException("An .ico needs at least one frame");
-        }
-        if (frames.size() > 0xFFFF) {
-            throw new IllegalArgumentException("An .ico holds at most 65535 frames");
-        }
+        checkFrameCount(frames.size());
         List<byte[]> bodies = new ArrayList<>();
         int total = FILE_HEADER + ENTRY * frames.size();
         for (BufferedImage frame : frames) {
@@ -82,16 +91,26 @@ public final class Ico {
         return out.array();
     }
 
+    private static void checkFrameCount(int count) {
+        if (count < 1 || count > 0xFFFF) {
+            throw new IllegalArgumentException("An .ico needs between 1 and 65535 frames: " + count);
+        }
+    }
+
     private static int side(BufferedImage frame) {
         Objects.requireNonNull(frame, "frame");
         int size = frame.getWidth();
         if (size != frame.getHeight()) {
             throw new IllegalArgumentException("An .ico frame is square, not " + size + "x" + frame.getHeight());
         }
+        checkSide(size);
+        return size;
+    }
+
+    private static void checkSide(int size) {
         if (size < 1 || size > MAX_SIZE) {
             throw new IllegalArgumentException("An .ico frame is 1 to " + MAX_SIZE + " pixels a side, not " + size);
         }
-        return size;
     }
 
     /**

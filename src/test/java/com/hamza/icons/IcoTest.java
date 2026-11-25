@@ -85,6 +85,16 @@ class IcoTest {
     }
 
     @Test
+    void checksEveryRequestedSizeAndTheCountBeforeDrawing() {
+        IconDrawing neverDraw = (g, size) -> { throw new AssertionError("Rendered " + size); };
+        for (int invalid : new int[]{0, -1, 257}) {
+            assertThrows(IllegalArgumentException.class, () -> Ico.encode(neverDraw, 16, invalid));
+            assertThrows(IllegalArgumentException.class, () -> IconSet.of(neverDraw).ico("app.ico", 16, invalid));
+        }
+        assertThrows(IllegalArgumentException.class, () -> Ico.encode(neverDraw, new int[65536]));
+    }
+
+    @Test
     void refusesFramesAnIcoCannotHold() {
         assertThrows(IllegalArgumentException.class, () -> Ico.encode(List.of()));
         assertThrows(IllegalArgumentException.class, () -> Ico.encode(TestIcon.DRAWING, 512));

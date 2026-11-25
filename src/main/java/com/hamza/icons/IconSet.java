@@ -3,9 +3,7 @@ package com.hamza.icons;
 import java.awt.Color;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -51,8 +49,8 @@ public final class IconSet {
 
     /** A Windows icon at the sizes given, each at most {@value Ico#MAX_SIZE}. */
     public IconSet ico(String path, int... sizes) {
-        int[] chosen = some(sizes);
-        return file(path, () -> Ico.encode(drawing, chosen));
+        int[] chosen = Ico.checkedSizes(sizes);
+        return file(path, () -> Ico.renderFrames(drawing, chosen));
     }
 
     /** A macOS icon. */
@@ -62,6 +60,7 @@ public final class IconSet {
 
     /** One PNG: 512 for a Linux package, or any size for a README. */
     public IconSet png(String path, int size) {
+        checkPngSize(size);
         return file(path, () -> Images.png(drawing.render(size)));
     }
 
@@ -80,7 +79,14 @@ public final class IconSet {
         if (!pattern.contains(SIZE)) {
             throw new IllegalArgumentException("The pattern needs %d where the size goes: " + pattern);
         }
-        for (int size : some(sizes)) {
+        if (sizes == null || sizes.length == 0) {
+            throw new IllegalArgumentException("At least one size is needed");
+        }
+        int[] chosen = sizes.clone();
+        for (int size : chosen) {
+            checkPngSize(size);
+        }
+        for (int size : chosen) {
             png(pattern.replace(SIZE, Integer.toString(size)), size);
         }
         return this;
@@ -141,21 +147,15 @@ public final class IconSet {
     }
 
     /**
-     * Writes the files, creating their directories and replacing what is there.
+     * Prepares every output before replacing any file. A failed replacement triggers restoration of
+     * earlier files. Individual replacements require atomic moves on the destination filesystem.
      *
      * @param root the directory the paths are relative to, usually the project's
      * @return the files written, in the order they were asked for
      */
     public List<Path> write(Path root) throws IOException {
         Path base = Objects.requireNonNull(root, "root").toAbsolutePath().normalize();
-        List<Path> written = new ArrayList<>();
-        for (Map.Entry<String, Supplier<byte[]>> file : files.entrySet()) {
-            Path target = base.resolve(file.getKey()).normalize();
-            Files.createDirectories(target.getParent());
-            Files.write(target, file.getValue().get());
-            written.add(target);
-        }
-        return written;
+        return OutputFiles.write(base, files);
     }
 
     private IconSet file(String path, Supplier<byte[]> content) {
@@ -165,10 +165,9 @@ public final class IconSet {
         return this;
     }
 
-    private static int[] some(int[] sizes) {
-        if (sizes == null || sizes.length == 0) {
-            throw new IllegalArgumentException("At least one size is needed");
+    private static void checkPngSize(int size) {
+        if (size < 1) {
+            throw new IllegalArgumentException("An icon needs a positive size: " + size);
         }
-        return sizes.clone();
     }
 }
