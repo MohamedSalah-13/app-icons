@@ -3,7 +3,7 @@ package com.hamza.icons;
 import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
-import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 
 final class Pwa {
     private Pwa() {
@@ -15,11 +15,11 @@ final class Pwa {
         return 2 * (int) Math.floor(0.4 * size / Math.sqrt(2));
     }
 
-    static byte[] opaquePng(IconDrawing drawing, int size, int markSize) {
+    static byte[] opaquePng(IconDrawing drawing, int size, int markSize, Color background) {
         BufferedImage image = new BufferedImage(size, size, BufferedImage.TYPE_INT_RGB);
         Graphics2D g = image.createGraphics();
         try {
-            g.setColor(Color.WHITE);
+            g.setColor(background);
             g.fillRect(0, 0, size, size);
             int inset = (size - markSize) / 2;
             g.drawImage(drawing.render(markSize), inset, inset, null);
@@ -34,7 +34,7 @@ final class Pwa {
                 + "\",\"type\":\"image/png\",\"purpose\":\"" + purpose + "\"}";
     }
 
-    static byte[] manifest(String name, String icons) {
+    static String manifest(String name, String icons, Color background) {
         return """
                 {
                   "name": "%1$s",
@@ -42,12 +42,12 @@ final class Pwa {
                   "start_url": "./",
                   "scope": "./",
                   "display": "standalone",
-                  "background_color": "#ffffff",
+                  "background_color": "%3$s",
                   "icons": [
                     %2$s
                   ]
                 }
-                """.formatted(escapeJson(name), icons).getBytes(StandardCharsets.UTF_8);
+                """.formatted(escapeJson(name), icons, String.format(Locale.ROOT, "#%06x", background.getRGB() & 0xffffff));
     }
 
     private static String escapeJson(String text) {

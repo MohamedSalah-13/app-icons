@@ -144,21 +144,36 @@ public final class IconSet {
 
     /** Adds web and maskable icons, an Apple touch icon, and a manifest rooted at the output directory. */
     public IconSet pwa(String appName) {
+        return pwa(appName, Color.WHITE, null);
+    }
+
+    /**
+     * Adds a PWA set with an opaque background for the maskable and Apple touch icons.
+     * An optional JSON object supplies manifest fields; the generated top-level icons array
+     * replaces the template's array. Passing a template requires Gson.
+     */
+    public IconSet pwa(String appName, Color background, String manifestTemplate) {
         Objects.requireNonNull(appName, "appName");
         if (appName.isBlank()) {
             throw new IllegalArgumentException("The manifest needs an application name");
         }
+        if (Objects.requireNonNull(background, "background").getAlpha() != 255) {
+            throw new IllegalArgumentException("The PWA icon background must be opaque");
+        }
+        PwaTemplate template = manifestTemplate == null ? null : new PwaTemplate(manifestTemplate);
         StringJoiner entries = new StringJoiner(",\n    ");
         for (int size : new int[]{192, 512}) {
             String standard = "icon-" + size + ".png";
             String maskable = "maskable-" + size + ".png";
             png(standard, size);
-            file(maskable, () -> Pwa.opaquePng(drawing, size, Pwa.safeSquare(size)));
+            file(maskable, () -> Pwa.opaquePng(drawing, size, Pwa.safeSquare(size), background));
             entries.add(Pwa.icon(standard, size, "any"));
             entries.add(Pwa.icon(maskable, size, "maskable"));
         }
-        file("apple-touch-icon.png", () -> Pwa.opaquePng(drawing, 180, 180));
-        return file("manifest.webmanifest", () -> Pwa.manifest(appName, entries.toString()));
+        String defaults = Pwa.manifest(appName, entries.toString(), background);
+        String manifest = template == null ? defaults : template.merge(defaults);
+        file("apple-touch-icon.png", () -> Pwa.opaquePng(drawing, 180, 180, background));
+        return file("manifest.webmanifest", () -> manifest.getBytes(StandardCharsets.UTF_8));
     }
 
     /** Writes the files under the current directory; see {@link #write(Path)}. */

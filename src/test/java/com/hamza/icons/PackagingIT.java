@@ -38,7 +38,7 @@ class PackagingIT {
     @Test
     void modularDrawingUsesOnlyTheLibraryJar() throws Exception {
         runConsumer("", System.getProperty("packagedJar"),
-                "com.hamza.icons.IconSet.of((g, size) -> {}).png(\"result.png\", 16).write();");
+                "com.hamza.icons.IconSet.of((g, size) -> {}).png(\"result.png\", 16).pwa(\"App\").write();");
         assertEquals(16, ImageIO.read(folder.resolve("result.png").toFile()).getWidth());
     }
 
@@ -139,6 +139,91 @@ class PackagingIT {
         assertEquals(0xffff0000, apple.getRGB(0, 0));
         assertEquals(0xffffffff, apple.getRGB(179, 0));
         assertFalse(Files.exists(out.resolve("app.ico")));
+    }
+
+    @Test
+    void pwaTemplateKeepsNestedFieldsAndCheckUsesTheSameInputs() throws Exception {
+        String jar = System.getProperty("cliJar");
+        Files.writeString(folder.resolve("logo.svg"), SVG);
+        Path template = folder.resolve("base manifest.json");
+        String source = """
+                {
+                  "name": "بوابة الطلبات",
+                  "start_url": "./inbox",
+                  "background_color": "#070809",
+                  "icons": [{"src":"obsolete.png"}],
+                  "shortcuts": [{"name":"Inbox", "url":"./inbox", "icons":[{"src":"mail.png"}]}],
+                  "custom": {"values":[1, null, false]}
+                }
+                """;
+        Files.writeString(template, source);
+        String[] options = {"--manifest-template", "base manifest.json", "--background-color", "#153A60",
+                "--pwa", "logo.svg", "public"};
+        var generate = new ArrayList<>(List.of("-jar", jar));
+        generate.addAll(List.of(options));
+        run(0, "java", generate.toArray(String[]::new));
+        var check = new ArrayList<>(generate);
+        check.add("--check");
+        run(0, "java", check.toArray(String[]::new));
+        assertEquals(source, Files.readString(template));
+
+        Path out = folder.resolve("public");
+        Path manifestPath = out.resolve("manifest.webmanifest");
+        String originalManifest = Files.readString(manifestPath);
+        var json = new GsonBuilder().setStrictness(Strictness.STRICT).create();
+        var manifest = json.fromJson(originalManifest, JsonObject.class);
+        var fields = json.fromJson(source, JsonObject.class);
+        for (String key : List.of("name", "start_url", "background_color", "shortcuts", "custom")) {
+            assertEquals(fields.get(key), manifest.get(key), key);
+        }
+        assertEquals(fields.get("name"), manifest.get("short_name"));
+        assertEquals("standalone", manifest.get("display").getAsString());
+        assertEquals(4, manifest.getAsJsonArray("icons").size());
+        assertFalse(originalManifest.contains("obsolete.png"));
+        for (String file : List.of("maskable-192.png", "maskable-512.png", "apple-touch-icon.png")) {
+            var image = ImageIO.read(out.resolve(file).toFile());
+            assertEquals(0xff153a60, image.getRGB(image.getWidth() - 1, 0));
+        }
+        assertEquals(0, ImageIO.read(out.resolve("icon-192.png").toFile()).getRGB(191, 0));
+
+        check.set(check.indexOf("#153A60"), "#224466");
+        String colorChanges = run(1, "java", check.toArray(String[]::new));
+        assertTrue(colorChanges.contains("DIFFERENT " + out.resolve("maskable-192.png")));
+        assertTrue(colorChanges.contains("DIFFERENT " + out.resolve("apple-touch-icon.png")));
+        check.set(check.indexOf("#224466"), "#153A60");
+        Files.writeString(template, source.replace("Inbox", "Messages"));
+        String templateChanges = run(1, "java", check.toArray(String[]::new));
+        assertTrue(templateChanges.contains("DIFFERENT " + manifestPath));
+        assertFalse(templateChanges.contains("maskable-192.png"));
+        assertEquals(originalManifest, Files.readString(manifestPath));
+    }
+
+    @Test
+    void templateAndBackgroundAreIndependentlyOptional() throws Exception {
+        String jar = System.getProperty("cliJar");
+        Files.writeString(folder.resolve("logo.svg"), SVG);
+        Files.writeString(folder.resolve("base.json"), "{\"theme_color\":\"navy\"}");
+        Path out = folder.resolve("web");
+        run(0, "java", "-jar", jar, "--pwa", "--manifest-template", "base.json", "logo.svg", "web");
+        assertEquals(0xffffffff, ImageIO.read(out.resolve("maskable-512.png").toFile()).getRGB(0, 0));
+        run(0, "java", "-jar", jar, "--pwa", "--background-color", "#112233", "logo.svg", "web");
+        assertEquals(0xff112233, ImageIO.read(out.resolve("maskable-512.png").toFile()).getRGB(0, 0));
+        assertTrue(Files.readString(out.resolve("manifest.webmanifest")).contains("\"background_color\": \"#112233\""));
+    }
+
+    @Test
+    void invalidPwaInputsFailBeforeChangingExistingOutputs() throws Exception {
+        String jar = System.getProperty("cliJar");
+        Files.writeString(folder.resolve("logo.svg"), SVG);
+        Path out = Files.createDirectory(folder.resolve("web"));
+        Path manifest = Files.writeString(out.resolve("manifest.webmanifest"), "{}");
+        Path bad = Files.writeString(folder.resolve("invalid.json"), "{broken");
+        run(1, "java", "-jar", jar, "--pwa", "--manifest-template", bad.toString(), "logo.svg", "web");
+        run(1, "java", "-jar", jar, "--pwa", "--manifest-template", manifest.toString(), "logo.svg", "web");
+        run(2, "java", "-jar", jar, "--pwa", "--background-color", "#ffffff80", "logo.svg", "web");
+        run(2, "java", "-jar", jar, "--manifest-template", "invalid.json", "logo.svg", "web");
+        assertEquals("{}", Files.readString(manifest));
+        assertFalse(Files.exists(out.resolve("icon-192.png")));
     }
 
     @Test

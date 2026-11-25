@@ -47,6 +47,34 @@ java -jar app-icons-0.7.0-cli.jar --pwa "My App.svg" public
 <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
 ```
 
+### تخصيص قالب PWA وخلفية الأيقونات
+
+في النسخة المبنية من المصدر، يقبل `--pwa` خيارين مستقلين. يقرأ `--manifest-template` ملف JSON بترميز UTF-8.
+مثال لملف `config/app.webmanifest`:
+
+```json
+{
+  "name": "صندوق البريد",
+  "short_name": "البريد",
+  "theme_color": "#17324d",
+  "shortcuts": [{"name": "الوارد", "url": "./inbox"}]
+}
+```
+
+```shell
+mvn verify
+java -jar target/app-icons-0.7.0-cli.jar --pwa --manifest-template config/app.webmanifest --background-color "#17324d" logo.svg public
+java -jar target/app-icons-0.7.0-cli.jar --check --pwa --manifest-template config/app.webmanifest --background-color "#17324d" logo.svg public
+```
+
+احتفظ بالقالب كملف مصدر مستقل عن المخرجات. يستبدل المولّد مصفوفة `icons` في المستوى الأعلى، ويحافظ على بقية
+حقول القالب، بما فيها أيقونات `shortcuts`، ويضيف القيم الافتراضية للحقول الناقصة. تُفسَّر الروابط النسبية
+في المتصفح نسبةً إلى مكان نشر `manifest.webmanifest`.
+
+يقبل `--background-color` لونًا معتمًا بصيغة `#RRGGBB` لخلفية أيقونات maskable وApple touch.
+اللون الافتراضي أبيض، وتحتفظ الأيقونات العادية بالشفافية الأصلية. إذا حدّد القالب `background_color`
+تُحفظ قيمته في الـmanifest، وإلا يكتب المولّد لون خلفية الأيقونات في هذا الحقل.
+
 ### فحص الملفات في CI
 
 استخدم ملف الـCLI المنزّل لفحص المخرجات المحفوظة في مشروعك.

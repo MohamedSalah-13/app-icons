@@ -10,6 +10,7 @@ module com.hamza.icons {
     requires transitive java.desktop;
     requires static javafx.graphics;
     requires static com.github.weisj.jsvg;
+    requires static com.google.gson;
 
     exports com.hamza.icons;
     exports com.hamza.icons.fx;

@@ -45,12 +45,12 @@
             <version>${junit.version}</version>
             <scope>test</scope>
         </dependency>
-        <!-- Read the generated web manifest independently in the tests. -->
+        <!-- Only manifest templates need a JSON parser. The CLI bundles it. -->
         <dependency>
             <groupId>com.google.code.gson</groupId>
             <artifactId>gson</artifactId>
             <version>2.13.2</version>
-            <scope>test</scope>
+            <optional>true</optional>
         </dependency>
     </dependencies>
 
