@@ -12,12 +12,13 @@
 
 ## تحويل SVG من سطر الأوامر
 
-من جذر المشروع، استخدم Java 21 فأحدث لبناء الأداة وتشغيلها:
+نزّل [ملف CLI للإصدار v0.4.0](https://github.com/MohamedSalah-13/app-icons/releases/download/v0.4.0/app-icons-0.4.0-cli.jar)، ثم شغّله باستخدام Java 21 فأحدث:
 
 ```shell
-mvn verify
-java -jar target/app-icons-0.3.0-cli.jar logo.svg output
+java -jar app-icons-0.4.0-cli.jar logo.svg output
 ```
+
+للبناء من المصدر، شغّل `mvn verify` من جذر المشروع. ستجد الملف في `target/app-icons-0.4.0-cli.jar`.
 
 يحمل ملف الـCLI مكتبة JSVG معه. ينشئ الأمر داخل `output` ملفّي `app.ico` و`app.icns`،
 وصورة `app.png` بمقاس 512، وسبع صور داخل `png/` بأسماء مثل `icon-16.png` و`icon-256.png`.
@@ -46,7 +47,7 @@ java -jar target/app-icons-0.3.0-cli.jar logo.svg output
 <dependency>
     <groupId>com.github.MohamedSalah-13</groupId>
     <artifactId>app-icons</artifactId>
-    <version>v0.3.0</version>
+    <version>v0.4.0</version>
 </dependency>
 ```
 
@@ -55,7 +56,7 @@ java -jar target/app-icons-0.3.0-cli.jar logo.svg output
 `xml-apis:xml-apis-ext`)، فيُحفظ جار فارغ ويفشل البناء بـ `zip file is empty` على أي جهاز مستودعه المحلي فارغ،
 وأولها خادم CI. يعمل على جهازك لأن الجار السليم محفوظ عندك من قبل.
 
-عند البناء من هذا الفرع، أضف إلى `module-info.java` السطر `requires com.hamza.icons;`.
+عند استخدام Java Modules، أضف إلى `module-info.java` السطر `requires com.hamza.icons;`.
 إذا استعملت `SvgDrawing` فأضف أيضًا `requires com.github.weisj.jsvg;` وضع JSVG على
 الـmodule path وقت الترجمة والتشغيل. وإذا استعملت `AppIcons` فأضف `requires javafx.graphics;`
 أو وحدة JavaFX تتيحها لتطبيقك مثل `javafx.controls`.
@@ -94,7 +95,7 @@ public class AppIcon {
 يُشغَّل يدويًا عند تعديل الأيقونة فقط، من جذر المشروع، والملفات الناتجة تُحفظ في المستودع:
 
 ```
-java -cp "%USERPROFILE%\.m2\repository\com\github\MohamedSalah-13\app-icons\v0.3.0\app-icons-v0.3.0.jar" packaging\AppIcon.java .
+java -cp "%USERPROFILE%\.m2\repository\com\github\MohamedSalah-13\app-icons\v0.4.0\app-icons-v0.4.0.jar" packaging\AppIcon.java .
 ```
 
 الجار موجود في هذا المسار بعد أي بناء Maven للمشروع.
