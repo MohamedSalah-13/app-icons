@@ -1,6 +1,7 @@
 package com.hamza.icons;
 
 import javax.imageio.ImageIO;
+import javax.imageio.stream.MemoryCacheImageOutputStream;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -12,8 +13,8 @@ final class Images {
 
     static byte[] png(BufferedImage image) {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        try {
-            if (!ImageIO.write(image, "png", out)) {
+        try (var cache = new MemoryCacheImageOutputStream(out)) {
+            if (!ImageIO.write(image, "png", cache)) {
                 throw new IllegalStateException("This Java runtime has no PNG writer");
             }
         } catch (IOException e) {

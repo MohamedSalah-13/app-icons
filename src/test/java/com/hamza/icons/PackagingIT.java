@@ -12,12 +12,14 @@ import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -136,6 +138,60 @@ class PackagingIT {
         assertEquals(0xffff0000, apple.getRGB(0, 0));
         assertEquals(0xffffffff, apple.getRGB(179, 0));
         assertFalse(Files.exists(out.resolve("app.ico")));
+    }
+
+    @Test
+    void checkComparesDesktopFilesWithoutUpdatingThem() throws Exception {
+        Path svg = Files.writeString(folder.resolve("logo.svg"), SVG);
+        String jar = System.getProperty("cliJar");
+        run(0, "java", "-jar", jar, "logo.svg", "desktop");
+        Path out = folder.resolve("desktop");
+        Path ico = out.resolve("app.ico");
+        byte[] original = Files.readAllBytes(ico);
+        Files.setLastModifiedTime(ico, FileTime.fromMillis(1000000000000L));
+        FileTime modified = Files.getLastModifiedTime(ico);
+        Files.writeString(out.resolve("unrelated.txt"), "keep");
+        run(0, "java", "-Djava.io.tmpdir=absent-temp", "-jar", jar, "--check", "logo.svg", "desktop");
+        assertEquals(modified, Files.getLastModifiedTime(ico));
+        assertFalse(Files.exists(folder.resolve("absent-temp")));
+
+        Files.writeString(svg, SVG.replace("#ff0000", "#0000ff"));
+        String report = run(1, "java", "-jar", jar, "--check", "logo.svg", "desktop");
+        assertTrue(report.contains("DIFFERENT " + ico));
+        assertTrue(report.contains("DIFFERENT " + out.resolve("app.icns")));
+        assertTrue(report.contains("DIFFERENT " + out.resolve("png/icon-16.png")));
+        assertFalse(report.contains("unrelated.txt"));
+        assertEquals(modified, Files.getLastModifiedTime(ico));
+        assertArrayEquals(original, Files.readAllBytes(ico));
+    }
+
+    @Test
+    void checkReportsMissingPwaIconAndSameLengthManifestEditTogether() throws Exception {
+        Files.writeString(folder.resolve("My App.svg"), SVG);
+        String jar = System.getProperty("cliJar");
+        run(0, "java", "-jar", jar, "--pwa", "My App.svg", "site");
+        run(0, "java", "-jar", jar, "--check", "--pwa", "My App.svg", "site");
+        Path site = folder.resolve("site");
+        Path missing = site.resolve("maskable-512.png");
+        Files.delete(missing);
+        Path manifest = site.resolve("manifest.webmanifest");
+        String edited = Files.readString(manifest).replace("My App", "My Old");
+        Files.writeString(manifest, edited);
+        String report = run(1, "java", "-jar", jar, "--pwa", "--check", "My App.svg", "site");
+        assertTrue(report.contains("MISSING " + missing));
+        assertTrue(report.contains("DIFFERENT " + manifest));
+        assertFalse(report.contains("apple-touch-icon.png"));
+        assertFalse(Files.exists(missing));
+        assertEquals(edited, Files.readString(manifest));
+    }
+
+    @Test
+    void checkLeavesAMissingOutputDirectoryAbsent() throws Exception {
+        Files.writeString(folder.resolve("logo.svg"), SVG);
+        String report = run(1, "java", "-jar", System.getProperty("cliJar"),
+                "--check", "logo.svg", "absent/nested");
+        assertEquals(10, report.lines().filter(line -> line.startsWith("MISSING ")).count());
+        assertFalse(Files.exists(folder.resolve("absent")));
     }
 
     @Test

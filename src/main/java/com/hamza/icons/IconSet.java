@@ -178,6 +178,18 @@ public final class IconSet {
         return OutputFiles.write(base, files);
     }
 
+    /** Reasons an expected output failed its byte-for-byte check. */
+    public enum Difference { MISSING, DIFFERENT }
+
+    /**
+     * Compares this set with the files under root without creating outputs or directories.
+     * Returns only differing or missing paths, in request order. Unrelated files are ignored.
+     */
+    public Map<Path, Difference> check(Path root) throws IOException {
+        Path base = Objects.requireNonNull(root, "root").toAbsolutePath().normalize();
+        return OutputFiles.check(base, files);
+    }
+
     private IconSet file(String path, Supplier<byte[]> content) {
         Objects.requireNonNull(path, "path");
         files.remove(path); // so that the order is that of the last request

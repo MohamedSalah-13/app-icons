@@ -47,6 +47,23 @@ java -jar app-icons-0.5.0-cli.jar --pwa "My App.svg" public
 <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
 ```
 
+### فحص الملفات في CI
+
+ابنِ نسخة الـCLI من المصدر باستخدام `mvn verify`، ثم شغّل أمر الفحص المناسب:
+
+```shell
+# أيقونات سطح المكتب
+java -jar target/app-icons-0.5.0-cli.jar --check logo.svg output
+
+# أيقونات الويب وملف manifest.webmanifest
+java -jar target/app-icons-0.5.0-cli.jar --check --pwa "My App.svg" public
+```
+
+يقارن `--check` محتوى كل ملف متوقع بايتًا ببايت، ويتجاهل الملفات الإضافية. يقرأ الملفات الموجودة
+ويترك محتواها ومواعيد تعديلها كما هي، حتى لو كان مجلد الإخراج نفسه مفقودًا.
+كود الخروج `0` يعني التطابق. عند وجود فروق يطبع `MISSING` أو `DIFFERENT` مع مسار كل ملف ويخرج
+بالكود `1`. أخطاء القراءة أو الرسم تفشل أيضًا بالكود `1`، وصيغة الأمر غير الصحيحة ترجع `2`.
+
 ## الاستخدام
 
 `pom.xml`:

@@ -3,8 +3,11 @@ package com.hamza.icons;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.NoSuchFileException;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.PosixFileAttributeView;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,13 +33,7 @@ final class OutputFiles implements AutoCloseable {
             for (var entry : targets.entrySet()) {
                 Path target = entry.getKey();
                 Path parent = target.getParent();
-                Path existing = parent;
-                while (!Files.exists(existing, NOFOLLOW_LINKS) && !existing.equals(base)) {
-                    existing = existing.getParent();
-                }
-                if (!existing.toRealPath().startsWith(realBase)) {
-                    throw new IOException("Output directory points outside " + base + ": " + parent);
-                }
+                checkParent(base, realBase, parent);
                 Files.createDirectories(parent);
                 Output output = new Output(target, Files.createTempDirectory(parent, ".app-icons-"));
                 batch.outputs.add(output);
@@ -44,6 +41,48 @@ final class OutputFiles implements AutoCloseable {
             }
             commit(batch.outputs);
             return new ArrayList<>(targets.keySet());
+        }
+    }
+
+    static Map<Path, IconSet.Difference> check(Path base, Map<String, Supplier<byte[]>> files) throws IOException {
+        var targets = targetsUnder(base, files);
+        Map<Path, IconSet.Difference> differences = new LinkedHashMap<>();
+        if (Files.notExists(base, NOFOLLOW_LINKS)) {
+            targets.keySet().forEach(target -> differences.put(target, IconSet.Difference.MISSING));
+            return differences;
+        }
+        Path realBase = base.toRealPath();
+        for (var entry : targets.entrySet()) {
+            Path target = entry.getKey();
+            checkParent(base, realBase, target.getParent());
+            try {
+                var attributes = Files.readAttributes(target, BasicFileAttributes.class, NOFOLLOW_LINKS);
+                if (!attributes.isRegularFile() || !matches(target, attributes.size(), entry.getValue().get())) {
+                    differences.put(target, IconSet.Difference.DIFFERENT);
+                }
+            } catch (NoSuchFileException missing) {
+                differences.put(target, IconSet.Difference.MISSING);
+            }
+        }
+        return differences;
+    }
+
+    private static boolean matches(Path target, long size, byte[] expected) throws IOException {
+        if (size != expected.length) {
+            return false;
+        }
+        try (var input = Files.newInputStream(target, NOFOLLOW_LINKS)) {
+            return Arrays.equals(expected, input.readNBytes(expected.length)) && input.read() == -1;
+        }
+    }
+
+    private static void checkParent(Path base, Path realBase, Path parent) throws IOException {
+        Path existing = parent;
+        while (!Files.exists(existing, NOFOLLOW_LINKS) && !existing.equals(base)) {
+            existing = existing.getParent();
+        }
+        if (!existing.toRealPath().startsWith(realBase)) {
+            throw new IOException("Output directory points outside " + base + ": " + parent);
         }
     }
 
