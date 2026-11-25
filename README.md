@@ -12,13 +12,13 @@
 
 ## تحويل SVG من سطر الأوامر
 
-نزّل [ملف CLI للإصدار v0.7.0](https://github.com/MohamedSalah-13/app-icons/releases/download/v0.7.0/app-icons-0.7.0-cli.jar)، ثم شغّله باستخدام Java 21 فأحدث:
+نزّل [ملف CLI للإصدار v0.8.0](https://github.com/MohamedSalah-13/app-icons/releases/download/v0.8.0/app-icons-0.8.0-cli.jar)، ثم شغّله باستخدام Java 21 فأحدث:
 
 ```shell
-java -jar app-icons-0.7.0-cli.jar logo.svg output
+java -jar app-icons-0.8.0-cli.jar logo.svg output
 ```
 
-للبناء من المصدر، شغّل `mvn verify` من جذر المشروع. ستجد الملف في `target/app-icons-0.7.0-cli.jar`.
+للبناء من المصدر، شغّل `mvn verify` من جذر المشروع. ستجد الملف في `target/app-icons-0.8.0-cli.jar`.
 
 يحمل ملف الـCLI مكتبة JSVG معه. ينشئ الأمر داخل `output` ملفّي `app.ico` و`app.icns`،
 وصورة `app.png` بمقاس 512، وسبع صور داخل `png/` بأسماء مثل `icon-16.png` و`icon-256.png`.
@@ -29,7 +29,7 @@ java -jar app-icons-0.7.0-cli.jar logo.svg output
 بعد تنزيل ملف الـCLI، شغّل الأمر التالي لتوليد أيقونات الويب وملف الـmanifest في مجلد النشر.
 
 ```shell
-java -jar app-icons-0.7.0-cli.jar --pwa "My App.svg" public
+java -jar app-icons-0.8.0-cli.jar --pwa "My App.svg" public
 ```
 
 | المخرجات داخل `public` | الاستخدام |
@@ -49,7 +49,7 @@ java -jar app-icons-0.7.0-cli.jar --pwa "My App.svg" public
 
 ### تخصيص قالب PWA وخلفية الأيقونات
 
-في النسخة المبنية من المصدر، يقبل `--pwa` خيارين مستقلين. يقرأ `--manifest-template` ملف JSON بترميز UTF-8.
+يقبل `--pwa` خيارين مستقلين. يقرأ `--manifest-template` ملف JSON بترميز UTF-8.
 مثال لملف `config/app.webmanifest`:
 
 ```json
@@ -62,9 +62,8 @@ java -jar app-icons-0.7.0-cli.jar --pwa "My App.svg" public
 ```
 
 ```shell
-mvn verify
-java -jar target/app-icons-0.7.0-cli.jar --pwa --manifest-template config/app.webmanifest --background-color "#17324d" logo.svg public
-java -jar target/app-icons-0.7.0-cli.jar --check --pwa --manifest-template config/app.webmanifest --background-color "#17324d" logo.svg public
+java -jar app-icons-0.8.0-cli.jar --pwa --manifest-template config/app.webmanifest --background-color "#17324d" logo.svg public
+java -jar app-icons-0.8.0-cli.jar --check --pwa --manifest-template config/app.webmanifest --background-color "#17324d" logo.svg public
 ```
 
 احتفظ بالقالب كملف مصدر مستقل عن المخرجات. يستبدل المولّد مصفوفة `icons` في المستوى الأعلى، ويحافظ على بقية
@@ -81,10 +80,10 @@ java -jar target/app-icons-0.7.0-cli.jar --check --pwa --manifest-template confi
 
 ```shell
 # أيقونات سطح المكتب
-java -jar app-icons-0.7.0-cli.jar --check logo.svg output
+java -jar app-icons-0.8.0-cli.jar --check logo.svg output
 
 # أيقونات الويب وملف manifest.webmanifest
-java -jar app-icons-0.7.0-cli.jar --check --pwa "My App.svg" public
+java -jar app-icons-0.8.0-cli.jar --check --pwa "My App.svg" public
 ```
 
 يقارن `--check` محتوى كل ملف متوقع بايتًا ببايت، ويتجاهل الملفات الإضافية. يقرأ الملفات الموجودة
@@ -125,7 +124,7 @@ java -jar app-icons-0.7.0-cli.jar --check --pwa "My App.svg" public
 <dependency>
     <groupId>com.github.MohamedSalah-13</groupId>
     <artifactId>app-icons</artifactId>
-    <version>v0.7.0</version>
+    <version>v0.8.0</version>
 </dependency>
 ```
 
@@ -173,7 +172,7 @@ public class AppIcon {
 يُشغَّل يدويًا عند تعديل الأيقونة فقط، من جذر المشروع، والملفات الناتجة تُحفظ في المستودع:
 
 ```
-java -cp "%USERPROFILE%\.m2\repository\com\github\MohamedSalah-13\app-icons\v0.7.0\app-icons-v0.7.0.jar" packaging\AppIcon.java .
+java -cp "%USERPROFILE%\.m2\repository\com\github\MohamedSalah-13\app-icons\v0.8.0\app-icons-v0.8.0.jar" packaging\AppIcon.java .
 ```
 
 الجار موجود في هذا المسار بعد أي بناء Maven للمشروع.
