@@ -476,6 +476,63 @@ class PackagingIT {
     }
 
     @Test
+    void androidCliGeneratesAndChecksBothLauncherLayers() throws Exception {
+        String jar = System.getProperty("cliJar");
+        Files.writeString(folder.resolve("logo.svg"), SVG);
+        Path art = Files.createDirectory(folder.resolve("foreground art"));
+        BufferedImage green = new BufferedImage(1, 1, BufferedImage.TYPE_INT_RGB);
+        green.setRGB(0, 0, 0xff00ff00);
+        Path mark = art.resolve("mark.png");
+        ImageIO.write(green, "png", mark.toFile());
+        Files.writeString(art.resolve("layer.svg"), """
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+                  <image href="mark.png" width="32" height="32"/>
+                </svg>
+                """);
+        var args = new ArrayList<>(List.of("-jar", jar, "--android", "--foreground", "foreground art/layer.svg",
+                "--background-color", "#17324d", "logo.svg", "res"));
+        run(0, "java", args.toArray(String[]::new));
+        Path res = folder.resolve("res");
+        Path legacy = res.resolve("mipmap-mdpi/ic_launcher.png");
+        Path foreground = res.resolve("mipmap-xxxhdpi/ic_launcher_foreground.png");
+        var icon = ImageIO.read(legacy.toFile());
+        assertEquals(48, icon.getWidth());
+        assertEquals(0xffff0000, icon.getRGB(2, 2));
+        var layer = ImageIO.read(foreground.toFile());
+        assertEquals(432, layer.getWidth());
+        assertEquals(0xff00ff00, layer.getRGB(216, 216));
+        assertTrue(Files.readString(res.resolve("drawable/ic_launcher_background.xml")).contains("#17324D"));
+        assertTrue(Files.readString(res.resolve("mipmap-anydpi-v26/ic_launcher.xml")).contains("@mipmap/ic_launcher_foreground"));
+        try (var files = Files.walk(res)) {
+            assertEquals(12, files.filter(Files::isRegularFile).count());
+        }
+        args.add("--check");
+        run(0, "java", args.toArray(String[]::new));
+        byte[] original = Files.readAllBytes(foreground);
+        green.setRGB(0, 0, 0xff0000ff);
+        ImageIO.write(green, "png", mark.toFile());
+        Files.delete(legacy);
+        String report = run(1, "java", args.toArray(String[]::new));
+        assertTrue(report.contains("DIFFERENT " + foreground));
+        assertTrue(report.contains("MISSING " + legacy));
+        assertFalse(Files.exists(legacy));
+        assertArrayEquals(original, Files.readAllBytes(foreground));
+    }
+
+    @Test
+    void androidCliDefaultsToInputSvgAndWhiteBackground() throws Exception {
+        String jar = System.getProperty("cliJar");
+        Files.writeString(folder.resolve("logo.svg"), SVG);
+        run(0, "java", "-jar", jar, "--android", "logo.svg", "res");
+        var layer = ImageIO.read(folder.resolve("res/mipmap-mdpi/ic_launcher_foreground.png").toFile());
+        assertEquals(0xffff0000, layer.getRGB(1, 1));
+        assertEquals(0, layer.getRGB(107, 1) >>> 24);
+        assertTrue(Files.readString(folder.resolve("res/drawable/ic_launcher_background.xml")).contains("#FFFFFF"));
+        run(2, "java", "-jar", jar, "--foreground", "layer.svg", "logo.svg", "unused");
+        assertFalse(Files.exists(folder.resolve("unused")));
+    }
+
+    @Test
     void standaloneCliReportsHelpAndErrors() throws Exception {
         String jar = System.getProperty("cliJar");
         assertTrue(run(0, "java", "-jar", jar, "--help").contains("--pwa"));

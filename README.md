@@ -28,6 +28,20 @@ java -jar app-icons-0.9.3-cli.jar logo.svg output
 ملف الـSVG أو قالب الـmanifest أو صورة محلية يقرأها الرسم، يتوقف التوليد و`--check` برسالة
 تذكر المسارين قبل كتابة أي ملفات. اختر مجلد إخراج آخر أو غيّر اسم المصدر وحدّث مرجعه في الرسم.
 
+### أيقونات Android من سطر الأوامر
+
+في النسخة المبنية من المصدر، شغّل `mvn verify`، ثم مرّر مجلد موارد Android نفسه كمجلد الإخراج:
+
+```shell
+java -jar target/app-icons-0.9.3-cli.jar --android --foreground mark.svg --background-color "#17324d" logo.svg app/src/main/res
+java -jar target/app-icons-0.9.3-cli.jar --check --android --foreground mark.svg --background-color "#17324d" logo.svg app/src/main/res
+```
+
+يرسم `logo.svg` الأيقونة العادية في خمس كثافات من `mdpi` إلى `xxxhdpi`. يرسم `mark.svg` الطبقة الأمامية
+للأيقونة التكيفية، ويُكتب لون خلفيتها في `drawable/ic_launcher_background.xml`. عند حذف `--foreground`
+يُستخدم الرسم الرئيسي للطبقة الأمامية أيضًا، ولون الخلفية الافتراضي أبيض. تُقرأ الصور النسبية لكل SVG من مجلده.
+يخرج `--check` بالكود `1` إذا اختلف ملف أو غاب، ويترك المخرجات كما هي.
+
 ### أيقونات PWA
 
 بعد تنزيل ملف الـCLI، شغّل الأمر التالي لتوليد أيقونات الويب وملف الـmanifest في مجلد النشر.
