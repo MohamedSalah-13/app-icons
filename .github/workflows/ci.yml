@@ -3,11 +3,12 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
 
 permissions:
   contents: read
@@ -24,6 +25,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check release tag against pom.xml
+        if: github.ref_type == 'tag'
+        shell: pwsh
+        run: |
+          $version = ([xml](Get-Content -Raw -LiteralPath pom.xml)).project.version
+          if (-not $version -or $env:GITHUB_REF_NAME -cne "v$version") {
+            throw "Release tag '$env:GITHUB_REF_NAME' does not match project version '$version' in pom.xml"
+          }
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -38,8 +48,17 @@ jobs:
         shell: bash
         run: |
           mkdir -p target/platform-check
-          cp target/*-cli.jar target/platform-check/cli.jar
-          java -jar target/platform-check/cli.jar --pwa --preview .github/fixtures/ci-icon.svg target/platform-check/web
+          cp target/*-cli.jar target/platform-check/
+          java -jar target/platform-check/*-cli.jar --pwa --preview .github/fixtures/ci-icon.svg target/platform-check/web
+
+      - name: Record SHA-256 of the tested release JAR
+        if: runner.os == 'Windows' && github.ref_type == 'tag'
+        shell: bash
+        working-directory: target/platform-check
+        run: |
+          jar="app-icons-${GITHUB_REF_NAME#v}-cli.jar"
+          sha256sum --binary "$jar" > "$jar.sha256"
+          git rev-parse HEAD > tested-commit.txt
 
       - name: Upload the Windows outputs and the CLI that generated them
         if: runner.os == 'Windows'
@@ -75,11 +94,40 @@ jobs:
 
       - name: Compare the downloaded files with Linux rendering
         if: runner.os == 'Linux'
-        run: java -jar target/platform-check/cli.jar --check --pwa --preview .github/fixtures/ci-icon.svg target/platform-check/web
+        run: java -jar target/platform-check/*-cli.jar --check --pwa --preview .github/fixtures/ci-icon.svg target/platform-check/web
 
       - name: Decode the desktop icon with Apple's iconutil
         if: runner.os == 'macOS'
         run: |
-          java -jar target/platform-check/cli.jar .github/fixtures/ci-icon.svg target/desktop
+          java -jar target/platform-check/*-cli.jar .github/fixtures/ci-icon.svg target/desktop
           iconutil -c iconset -o target/app.iconset target/desktop/app.icns
           test -s target/app.iconset/icon_512x512@2x.png
+
+  release:
+    name: Publish tested CLI
+    if: github.event_name == 'push' && github.ref_type == 'tag' && !github.event.deleted
+    needs: platform-check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-pwa-preview
+          path: release
+
+      - name: Verify checksum and publish GitHub Release
+        working-directory: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          jar="app-icons-${GITHUB_REF_NAME#v}-cli.jar"
+          sha256sum --check --strict "$jar.sha256"
+          tagged_commit=$(gh api "repos/$GH_REPO/commits/refs/tags/$GITHUB_REF_NAME" --jq .sha)
+          if [[ "$tagged_commit" != "$(cat tested-commit.txt)" ]]; then
+            echo "Tag $GITHUB_REF_NAME no longer points to the tested commit" >&2
+            exit 1
+          fi
+          gh release create "$GITHUB_REF_NAME" "$jar" "$jar.sha256" \
+            --verify-tag --title "App Icons $GITHUB_REF_NAME" --generate-notes
