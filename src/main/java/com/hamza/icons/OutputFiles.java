@@ -22,7 +22,8 @@ import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
 final class OutputFiles implements AutoCloseable {
     private final List<Output> outputs = new ArrayList<>();
 
-    static List<Path> write(Path base, Map<String, Supplier<byte[]>> files) throws IOException {
+    // An overlapping write must not change a file between our comparison and commit.
+    static synchronized List<Path> write(Path base, Map<String, Supplier<byte[]>> files) throws IOException {
         if (files.isEmpty()) {
             return new ArrayList<>();
         }
@@ -34,10 +35,14 @@ final class OutputFiles implements AutoCloseable {
                 Path target = entry.getKey();
                 Path parent = target.getParent();
                 checkParent(base, realBase, parent);
+                byte[] expected = entry.getValue().get();
+                if (Files.isRegularFile(target, NOFOLLOW_LINKS) && matches(target, Files.size(target), expected)) {
+                    continue;
+                }
                 Files.createDirectories(parent);
                 Output output = new Output(target, Files.createTempDirectory(parent, ".app-icons-"));
                 batch.outputs.add(output);
-                Files.write(output.next(), entry.getValue().get());
+                Files.write(output.next(), expected);
             }
             commit(batch.outputs);
             return new ArrayList<>(targets.keySet());
@@ -107,8 +112,7 @@ final class OutputFiles implements AutoCloseable {
         return targets;
     }
 
-    /** Keep backups and replacements ordered even when two callers write overlapping sets. */
-    private static synchronized void commit(List<Output> outputs) throws IOException {
+    private static void commit(List<Output> outputs) throws IOException {
         for (Output output : outputs) {
             if (Files.exists(output.target, NOFOLLOW_LINKS)) {
                 if (!Files.isRegularFile(output.target, NOFOLLOW_LINKS)) {

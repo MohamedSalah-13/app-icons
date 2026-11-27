@@ -13,6 +13,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -78,6 +79,31 @@ class IconSetTest {
     }
 
     @Test
+    void regenerationLeavesMatchingFilesUntouchedAndRepairsChangedAndMissingFiles() throws IOException {
+        IconSet set = IconSet.of(TestIcon.DRAWING).pngs("icon-%d.png", 16, 32, 64);
+        List<Path> outputs = set.write(root);
+        FileTime oldTime = FileTime.fromMillis(1_600_000_000_000L);
+        for (Path file : outputs) {
+            Files.setLastModifiedTime(file, oldTime);
+        }
+        assertEquals(outputs, set.write(root));
+        for (Path file : outputs) {
+            assertEquals(oldTime, Files.getLastModifiedTime(file));
+        }
+        Path changed = outputs.get(1);
+        byte[] expected = Files.readAllBytes(changed);
+        byte[] damaged = expected.clone();
+        damaged[damaged.length - 1] ^= 1;
+        Files.write(changed, damaged);
+        Files.setLastModifiedTime(changed, oldTime);
+        Files.delete(outputs.get(2));
+        assertEquals(outputs, set.write(root));
+        assertArrayEquals(expected, Files.readAllBytes(changed));
+        assertEquals(oldTime, Files.getLastModifiedTime(outputs.get(0)));
+        assertTrue(set.check(root).isEmpty());
+    }
+
+    @Test
     void renderFailureKeepsOriginalFilesAndDiscardsStagedOutputs() throws IOException {
         Path original = root.resolve("old.png");
         Files.writeString(original, "original");
@@ -119,16 +145,23 @@ class IconSetTest {
     void restoresAlreadyReplacedFilesWhenWindowsDeniesTheLastRename() throws IOException {
         Path old = Files.writeString(root.resolve("old.png"), "old");
         Path locked = Files.writeString(root.resolve("locked.png"), "locked");
+        Path unchanged = IconSet.of(TestIcon.DRAWING).png("unchanged.png", 16).write(root).get(0);
+        FileTime oldTime = FileTime.fromMillis(1_600_000_000_000L);
+        Files.setLastModifiedTime(unchanged, oldTime);
+        Files.setLastModifiedTime(old, oldTime);
         // RandomAccessFile shares reads and writes on Windows, but does not share deletes/renames.
         try (var handle = new RandomAccessFile(locked.toFile(), "r")) {
-            IconSet set = IconSet.of(TestIcon.DRAWING).png("old.png", 16).png("new.png", 16).png("locked.png", 16);
+            IconSet set = IconSet.of(TestIcon.DRAWING).png("old.png", 16).png("unchanged.png", 16)
+                    .png("new.png", 16).png("locked.png", 16);
             assertThrows(IOException.class, () -> set.write(root));
             assertEquals("old", Files.readString(old));
+            assertEquals(oldTime, Files.getLastModifiedTime(old));
+            assertEquals(oldTime, Files.getLastModifiedTime(unchanged));
             assertFalse(Files.exists(root.resolve("new.png")));
             assertEquals("locked", Files.readString(locked));
         }
         try (var files = Files.list(root)) {
-            assertEquals(2, files.count());
+            assertEquals(3, files.count());
         }
     }
 

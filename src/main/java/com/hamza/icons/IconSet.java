@@ -197,11 +197,11 @@ public final class IconSet {
     }
 
     /**
-     * Prepares every output before replacing any file. A failed replacement triggers restoration of
+     * Leaves byte-identical files untouched and stages new or changed files. A failed replacement triggers restoration of
      * earlier files. Individual replacements require atomic moves on the destination filesystem.
      *
      * @param root the directory the paths are relative to, usually the project's
-     * @return the files written, in the order they were asked for
+     * @return all requested output paths, including unchanged files, in request order
      */
     public List<Path> write(Path root) throws IOException {
         Path base = Objects.requireNonNull(root, "root").toAbsolutePath().normalize();
