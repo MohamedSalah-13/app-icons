@@ -1,0 +1,3 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.hamza.icons.sample">
+    <application android:hasCode="false" android:icon="@mipmap/ic_launcher" />
+</manifest>

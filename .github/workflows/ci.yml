@@ -103,6 +103,21 @@ jobs:
           iconutil -c iconset -o target/app.iconset target/desktop/app.icns
           test -s target/app.iconset/icon_512x512@2x.png
 
+      - name: Compile and link Android launcher resources
+        if: runner.os == 'Linux'
+        run: |
+          aapt2="$ANDROID_HOME/build-tools/35.0.0/aapt2"
+          platform="$ANDROID_HOME/platforms/android-35/android.jar"
+          if [[ ! -x "$aapt2" || ! -f "$platform" ]]; then
+            sdkmanager 'build-tools;35.0.0' 'platforms;android-35'
+          fi
+          app=target/android-sample
+          java -jar target/platform-check/*-cli.jar --android .github/fixtures/ci-icon.svg "$app/res"
+          "$aapt2" compile --dir "$app/res" -o "$app/resources.zip"
+          "$aapt2" link -I "$platform" \
+            --manifest .github/fixtures/android/AndroidManifest.xml --min-sdk-version 21 \
+            -o "$app/sample.apk" "$app/resources.zip"
+
   release:
     name: Publish tested CLI
     if: github.event_name == 'push' && github.ref_type == 'tag' && !github.event.deleted

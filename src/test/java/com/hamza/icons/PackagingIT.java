@@ -395,6 +395,46 @@ class PackagingIT {
     }
 
     @Test
+    void androidCheckMatchesGitCheckoutWithAutocrlf() throws Exception {
+        String jar = System.getProperty("cliJar");
+        Files.writeString(folder.resolve("logo.svg"), SVG);
+        Files.writeString(folder.resolve(".gitattributes"), """
+                **/res/mipmap-anydpi-v26/ic_launcher.xml text eol=lf
+                **/res/drawable/ic_launcher_background.xml text eol=lf
+                """);
+        run(0, "java", "-jar", jar, "--android", "logo.svg", "app/src/main/res");
+        run(0, "git", "init", "--quiet");
+        run(0, "git", "-c", "core.autocrlf=true", "add", "--", ".gitattributes", "logo.svg", "app");
+        run(0, "git", "-c", "core.autocrlf=true", "checkout-index", "--all", "--prefix=checkout/");
+        run(0, "java", "-jar", jar, "--check", "--android", "checkout/logo.svg", "checkout/app/src/main/res");
+    }
+
+    @Test
+    void androidRejectsResourceNameCollisionsBeforeWritingOrChecking() throws Exception {
+        String jar = System.getProperty("cliJar");
+        Files.writeString(folder.resolve("logo.svg"), SVG);
+        Path density = Files.createDirectories(folder.resolve("res/mipmap-mdpi"));
+        Path other = Files.writeString(density.resolve("ic_launcher.xml"), "<shape/>");
+        Path target = density.resolve("ic_launcher.png");
+        String generation = run(1, "java", "-jar", jar, "--android", "logo.svg", "res");
+        String check = run(1, "java", "-jar", jar, "--check", "--android", "logo.svg", "res");
+        assertEquals(generation, check);
+        assertTrue(generation.contains("@mipmap/ic_launcher"), generation);
+        assertTrue(generation.contains(other.toString()) && generation.contains(target.toString()), generation);
+        assertEquals("<shape/>", Files.readString(other));
+        assertFalse(Files.exists(folder.resolve("res/drawable")));
+        assertFalse(Files.exists(target));
+        Files.move(other, density.resolve("other.xml"));
+        Path aliases = Files.createDirectories(folder.resolve("res/values-mdpi")).resolve("aliases.xml");
+        String alias = "<resources><item type=\"mipmap\" name=\"ic_launcher\">@mipmap/other</item></resources>";
+        Files.writeString(aliases, alias);
+        assertTrue(run(1, "java", "-jar", jar, "--android", "logo.svg", "res").contains(aliases.toString()));
+        Files.move(aliases, Files.createDirectories(folder.resolve("res/values-night-mdpi")).resolve("aliases.xml"));
+        run(0, "java", "-jar", jar, "--android", "logo.svg", "res");
+        run(0, "java", "-jar", jar, "--check", "--android", "logo.svg", "res");
+    }
+
+    @Test
     void pwaCheckMatchesAFreshGitCheckoutWithAutocrlf() throws Exception {
         String jar = System.getProperty("cliJar");
         Files.writeString(folder.resolve("logo.svg"), SVG);

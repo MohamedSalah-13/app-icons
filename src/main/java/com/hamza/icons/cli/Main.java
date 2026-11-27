@@ -64,7 +64,11 @@ public final class Main {
             if (options.template() != null) {
                 inputs.add(options.template());
             }
-            rejectInputOverwrites(icons.outputPaths(output), inputs);
+            List<Path> outputs = icons.outputPaths(output);
+            rejectInputOverwrites(outputs, inputs);
+            if (options.android()) {
+                AndroidResourceConflicts.check(output.toAbsolutePath().normalize(), outputs);
+            }
             if (options.template() != null) {
                 // A template changes the manifest contents, never the planned output paths.
                 icons = options.iconSet(drawing, foreground, Files.readString(options.template()));

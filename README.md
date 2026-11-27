@@ -42,6 +42,10 @@ java -jar app-icons-0.10.0-cli.jar --check --android --foreground mark.svg --bac
 يُستخدم الرسم الرئيسي للطبقة الأمامية أيضًا، ولون الخلفية الافتراضي أبيض. تُقرأ الصور النسبية لكل SVG من مجلده.
 يخرج `--check` بالكود `1` إذا اختلف ملف أو غاب، ويترك المخرجات كما هي.
 
+في النسخة المبنية من المصدر، يفحص `--android` أيضًا أسماء الموارد قبل التوليد أو المقارنة.
+مثلًا، وجود `mipmap-mdpi/ic_launcher.webp` يتعارض مع `mipmap-mdpi/ic_launcher.png` المولّد،
+وكذلك تعريف المورد نفسه في `values-mdpi`. يذكر التشخيص اسم المورد والمسارين المتعارضين.
+
 ### أيقونات PWA
 
 بعد تنزيل ملف الـCLI، شغّل الأمر التالي لتوليد أيقونات الويب وملف الـmanifest في مجلد النشر.
@@ -127,16 +131,19 @@ java -jar app-icons-0.10.0-cli.jar --check --pwa "My App.svg" public
 كود الخروج `0` يعني التطابق. عند وجود فروق يطبع `MISSING` أو `DIFFERENT` مع مسار كل ملف ويخرج
 بالكود `1`. أخطاء القراءة أو الرسم تفشل أيضًا بالكود `1`، وصيغة الأمر غير الصحيحة ترجع `2`.
 
-في المستودع الذي تحفظ فيه ملفات التطبيق، أضف هذا السطر إلى `.gitattributes` حتى يظل
-الـmanifest بنهايات أسطر LF بعد Git checkout على Windows وLinux، بما في ذلك عند تفعيل `core.autocrlf=true`.
+في جذر المستودع الذي تحفظ فيه المخرجات، أضف القواعد التالية إلى `.gitattributes` حتى تحتفظ
+الملفات النصية المولّدة بنهايات أسطر LF بعد Git checkout، بما في ذلك على Windows مع `core.autocrlf=true`.
 
 ```gitattributes
 *.webmanifest text eol=lf
 preview.html text eol=lf
+**/res/mipmap-anydpi-v26/ic_launcher.xml text eol=lf
+**/res/drawable/ic_launcher_background.xml text eol=lf
 ```
 
-لو كان الملف متتبّعًا قبل إضافة القاعدة، شغّل `git add --renormalize -- public/manifest.webmanifest`
-بمسار الملف في مشروعك، ثم احفظ التغيير مع `.gitattributes` في نفس الـcommit.
+إذا كنت تكتب موارد Android في مجلد اسمه غير `res`، عدّل المسارين ليتوافقا معه.
+للملفات المتتبّعة مسبقًا، نفّذ مثلًا `git add --renormalize -- app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml app/src/main/res/drawable/ic_launcher_background.xml`
+واحفظ التغيير مع `.gitattributes`.
 
 ## الاستخدام
 
