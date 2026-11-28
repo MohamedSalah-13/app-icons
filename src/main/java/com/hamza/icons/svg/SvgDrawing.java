@@ -44,7 +44,7 @@ public final class SvgDrawing {
     public static IconDrawing of(Path file, Consumer<Path> inputFile) throws IOException {
         Objects.requireNonNull(file, "file");
         Objects.requireNonNull(inputFile, "inputFile").accept(file);
-        var images = new LocalImages(inputFile);
+        var images = new LocalImages(file, inputFile);
         try (InputStream in = Files.newInputStream(file)) {
             SVGDocument document = new SVGLoader().load(in, file.toUri(), images.context());
             images.checkForFailure();

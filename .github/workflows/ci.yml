@@ -112,11 +112,29 @@ jobs:
             sdkmanager 'build-tools;35.0.0' 'platforms;android-35'
           fi
           app=target/android-sample
-          java -jar target/platform-check/*-cli.jar --android --monochrome .github/fixtures/ci-icon.svg .github/fixtures/ci-icon.svg "$app/res"
+          args=(--android --monochrome .github/fixtures/ci-icon.svg .github/fixtures/ci-icon.svg "$app/res")
+          java -jar target/platform-check/*-cli.jar "${args[@]}"
+          mkdir "$app/res/mipmap-mdpi-v5"
+          cp "$app/res/mipmap-mdpi/ic_launcher.png" "$app/res/mipmap-mdpi-v5/"
+          java -jar target/platform-check/*-cli.jar --check "${args[@]}"
           "$aapt2" compile --dir "$app/res" -o "$app/resources.zip"
           "$aapt2" link -I "$platform" \
             --manifest .github/fixtures/android/AndroidManifest.xml --min-sdk-version 21 \
             -o "$app/sample.apk" "$app/resources.zip"
+
+          # AAPT2 gives mdpi an implicit v4. Both tools must reject the duplicate.
+          mkdir "$app/res/mipmap-mdpi-v4"
+          cp "$app/res/mipmap-mdpi/ic_launcher.png" "$app/res/mipmap-mdpi-v4/"
+          if java -jar target/platform-check/*-cli.jar --check "${args[@]}" > "$app/check.log" 2>&1; then
+            exit 1
+          fi
+          grep -F '@mipmap/ic_launcher' "$app/check.log"
+          "$aapt2" compile --dir "$app/res" -o "$app/duplicate.zip"
+          if "$aapt2" link -I "$platform" --manifest .github/fixtures/android/AndroidManifest.xml \
+              --min-sdk-version 21 -o "$app/duplicate.apk" "$app/duplicate.zip" > "$app/link.log" 2>&1; then
+            exit 1
+          fi
+          grep -F "'mipmap/ic_launcher' has a conflicting value" "$app/link.log"
 
   release:
     name: Publish tested CLI

@@ -7,9 +7,12 @@ import org.junit.jupiter.api.io.TempDir;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Base64;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -62,6 +65,27 @@ class SvgDrawingTest {
         BufferedImage image = SvgDrawing.of(file).render(32);
 
         assertEquals(0xFFFF0000, image.getRGB(8, 16));
+    }
+
+    @Test
+    void fileImagesRejectAbsoluteAndMalformedReferencesButAllowEmbeddedImages(@TempDir Path folder) throws IOException {
+        Path svg = folder.resolve("source icon.svg");
+        String image = """
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1">
+                  <image width="1" height="1" href="%s"/>
+                </svg>
+                """;
+        for (String href : List.of("file:///icons/mark.png", "//example.invalid/mark.png", "/icons/mark.png", "bad%zz.png")) {
+            Files.writeString(svg, image.formatted(href));
+            String error = assertThrows(IOException.class, () -> SvgDrawing.of(svg)).getMessage();
+            assertTrue(error.contains(href) && error.contains("source icon.svg"), error);
+        }
+        BufferedImage pixel = new BufferedImage(1, 1, BufferedImage.TYPE_INT_RGB);
+        pixel.setRGB(0, 0, 0xff123456);
+        var bytes = new ByteArrayOutputStream();
+        ImageIO.write(pixel, "png", bytes);
+        Files.writeString(svg, image.formatted("data:image/png;base64," + Base64.getEncoder().encodeToString(bytes.toByteArray())));
+        assertEquals(0xff123456, SvgDrawing.of(svg).render(1).getRGB(0, 0));
     }
 
     @Test

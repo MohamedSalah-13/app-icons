@@ -338,6 +338,26 @@ class PackagingIT {
     }
 
     @Test
+    void rejectedImageReferenceStopsGenerationAndCheckBeforeWriting() throws Exception {
+        String jar = System.getProperty("cliJar");
+        String href = "https://example.invalid/images/brand mark.png?size=2#layer";
+        Files.writeString(folder.resolve("logo.svg"), SVG);
+        Files.writeString(folder.resolve("brand layer.svg"), """
+                <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 8 8">
+                  <image width="8" height="8" xlink:href="%s"/>
+                </svg>
+                """.formatted(href));
+        Path out = Files.createDirectory(folder.resolve("res"));
+        Path sentinel = Files.writeString(Files.createDirectory(out.resolve("mipmap-mdpi")).resolve("ic_launcher.png"), "previous");
+        String generation = run(1, "java", "-jar", jar, "--android", "--foreground", "brand layer.svg", "logo.svg", "res");
+        String check = run(1, "java", "-jar", jar, "--check", "--android", "--foreground", "brand layer.svg", "logo.svg", "res");
+        assertEquals(generation, check);
+        assertTrue(check.contains("brand layer.svg") && check.contains(href), check);
+        assertEquals("previous", Files.readString(sentinel));
+        assertFalse(Files.exists(out.resolve("drawable")));
+    }
+
+    @Test
     void refusesToReplaceALinkedImageBeforeWritingAnyPwaFiles() throws Exception {
         Path art = Files.createDirectory(folder.resolve("art"));
         Path site = Files.createDirectory(folder.resolve("site"));
@@ -430,6 +450,33 @@ class PackagingIT {
         Files.writeString(aliases, alias);
         assertTrue(run(1, "java", "-jar", jar, "--android", "logo.svg", "res").contains(aliases.toString()));
         Files.move(aliases, Files.createDirectories(folder.resolve("res/values-night-mdpi")).resolve("aliases.xml"));
+        run(0, "java", "-jar", jar, "--android", "logo.svg", "res");
+        run(0, "java", "-jar", jar, "--check", "--android", "logo.svg", "res");
+    }
+
+    @Test
+    void androidMatchesEquivalentDensityConfigurationsForFilesAndAliases() throws Exception {
+        String jar = System.getProperty("cliJar");
+        Files.writeString(folder.resolve("logo.svg"), SVG);
+        Path res = folder.resolve("res");
+        Path target = res.resolve("mipmap-mdpi/ic_launcher.png");
+        Path other = Files.writeString(Files.createDirectories(res.resolve("mipmap-mdpi-v4")).resolve("ic_launcher.png"), "previous");
+        Path aliases = Files.createDirectories(res.resolve("values-0160dpi-v3")).resolve("icons.xml");
+        for (Path conflict : List.of(other, aliases)) {
+            if (conflict.equals(aliases)) {
+                Files.writeString(aliases, "<resources><item type=\"mipmap\" name=\"ic_launcher\">@mipmap/other</item></resources>");
+            }
+            String generation = run(1, "java", "-jar", jar, "--android", "logo.svg", "res");
+            String check = run(1, "java", "-jar", jar, "--check", "--android", "logo.svg", "res");
+            assertEquals(generation, check);
+            assertTrue(check.contains("@mipmap/ic_launcher") && check.contains(target.toString())
+                    && check.contains(conflict.toString()), check);
+            assertFalse(Files.exists(target));
+            assertFalse(Files.exists(res.resolve("drawable")));
+            Files.delete(conflict);
+        }
+        Files.writeString(Files.createDirectories(res.resolve("mipmap-mdpi-v5")).resolve("ic_launcher.xml"), "<shape/>");
+        Files.writeString(Files.createDirectories(res.resolve("mipmap-anydpi")).resolve("ic_launcher.xml"), "<shape/>");
         run(0, "java", "-jar", jar, "--android", "logo.svg", "res");
         run(0, "java", "-jar", jar, "--check", "--android", "logo.svg", "res");
     }

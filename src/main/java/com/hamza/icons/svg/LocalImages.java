@@ -18,10 +18,12 @@ import java.util.function.Consumer;
 final class LocalImages implements ResourcePolicy {
     private final ResourceLoader decoder = LoaderContext.createDefault().resourceLoader();
     private final Set<URI> loading = new HashSet<>();
+    private final Path svg;
     private final Consumer<Path> inputFile;
     private IOException failure;
 
-    LocalImages(Consumer<Path> inputFile) {
+    LocalImages(Path svg, Consumer<Path> inputFile) {
+        this.svg = svg;
         this.inputFile = inputFile;
     }
 
@@ -32,13 +34,28 @@ final class LocalImages implements ResourcePolicy {
     @Override
     public URI resolveResourceURI(URI base, String href) {
         if (href.startsWith("data:")) {
-            return DENY_EXTERNAL.resolveResourceURI(base, href);
+            URI embedded = DENY_EXTERNAL.resolveResourceURI(base, href);
+            return embedded != null ? embedded : reject(base, href);
         }
-        URI ref = URI.create(href.replace(" ", "%20"));
-        if (ref.isAbsolute() || ref.getRawAuthority() != null || ref.getPath().startsWith("/")) {
-            return null;
+        try {
+            URI ref = URI.create(href.replace(" ", "%20"));
+            if (!ref.isAbsolute() && ref.getRawAuthority() == null && !ref.getPath().startsWith("/")
+                    && base != null && "file".equals(base.getScheme()) && base.getAuthority() == null) {
+                return base.resolve(ref);
+            }
+        } catch (IllegalArgumentException ignored) {
+            // Report malformed references with the original href, just like denied references.
         }
-        return base.resolve(ref);
+        return reject(base, href);
+    }
+
+    private URI reject(URI base, String href) {
+        if (failure == null) {
+            String source = base != null && "file".equals(base.getScheme()) ? base.getPath() : svg.toString();
+            failure = new IOException("Rejected image href=\"" + href + "\" in " + source
+                    + ". Use a relative image path or an embedded data URI.");
+        }
+        return null;
     }
 
     @Override
@@ -47,7 +64,8 @@ final class LocalImages implements ResourcePolicy {
         if ("file".equals(resolved.getScheme()) && resolved.getAuthority() == null) {
             return resolved;
         }
-        return DENY_EXTERNAL.resolveResourceURI(base, resolved);
+        URI allowed = DENY_EXTERNAL.resolveResourceURI(base, resolved);
+        return allowed != null ? allowed : reject(base, resolved.toString());
     }
 
     private ResourceSupplier<RenderableResource> loadImage(DomDocument document, URI uri) throws IOException {

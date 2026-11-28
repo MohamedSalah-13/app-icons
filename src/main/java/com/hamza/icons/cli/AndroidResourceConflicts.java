@@ -8,14 +8,23 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 /** Checks file resources and values aliases in the resource configurations the CLI writes. */
 final class AndroidResourceConflicts {
+    // Only configurations used by generated resources can conflict. Other axes (e.g. night) stay distinct.
+    private static final Pattern DENSITY_VERSION = Pattern.compile(
+            "(?:-(mdpi|hdpi|xhdpi|xxhdpi|xxxhdpi|anydpi|0*[1-9][0-9]*dpi))?(?:-v0*([0-9]{1,5}))?");
+
     private AndroidResourceConflicts() {}
 
     static void check(Path res, List<Path> outputs) throws IOException {
-        Map<Path, Map<String, Path>> aliases = new HashMap<>();
+        if (!Files.isDirectory(res)) {
+            return;
+        }
+        Map<String, Map<String, Path>> targetsByConfig = new HashMap<>();
         for (Path output : outputs) {
             Path dir = output.getParent();
             if (dir.equals(res)) {
@@ -24,31 +33,68 @@ final class AndroidResourceConflicts {
             String directory = dir.getFileName().toString();
             int dash = directory.indexOf('-');
             String type = dash < 0 ? directory : directory.substring(0, dash);
-            String qualifier = directory.substring(type.length());
-            String name = resourceName(output);
-            String key = type + "/" + name;
-            aliases.computeIfAbsent(res.resolve("values" + qualifier), ignored -> new HashMap<>()).put(key, output);
-            if (Files.isDirectory(dir)) {
-                try (var siblings = Files.newDirectoryStream(dir, name + ".*")) {
-                    for (Path file : siblings) {
-                        if (!file.equals(output) && resourceName(file).equals(name) && Files.isRegularFile(file)) {
-                            throw conflict(key, file, output);
-                        }
+            String config = configuration(directory.substring(type.length()));
+            targetsByConfig.computeIfAbsent(config, ignored -> new HashMap<>()).put(type + "/" + resourceName(output), output);
+        }
+        try (var directories = Files.newDirectoryStream(res)) {
+            for (Path dir : directories) {
+                String directory = dir.getFileName().toString();
+                int dash = directory.indexOf('-');
+                String type = dash < 0 ? directory : directory.substring(0, dash);
+                if (!type.equals("values") && !type.equals("mipmap") && !type.equals("drawable")) {
+                    continue;
+                }
+                Map<String, Path> targets = targetsByConfig.get(configuration(directory.substring(type.length())));
+                if (targets != null && Files.isDirectory(dir)) {
+                    checkDirectory(dir, type, targets);
+                }
+            }
+        }
+    }
+
+    private static void checkDirectory(Path dir, String type, Map<String, Path> targets) throws IOException {
+        boolean values = type.equals("values");
+        try (var files = Files.newDirectoryStream(dir, values ? "*.xml" : "*.*")) {
+            for (Path file : files) {
+                if (!Files.isRegularFile(file)) {
+                    continue;
+                }
+                if (values) {
+                    checkValues(file, targets);
+                } else {
+                    String key = type + "/" + resourceName(file);
+                    Path target = targets.get(key);
+                    if (target != null && !file.equals(target)) {
+                        throw conflict(key, file, target);
                     }
                 }
             }
         }
-        for (var entry : aliases.entrySet()) {
-            if (Files.isDirectory(entry.getKey())) {
-                try (var files = Files.newDirectoryStream(entry.getKey(), "*.xml")) {
-                    for (Path file : files) {
-                        if (Files.isRegularFile(file)) {
-                            checkValues(file, entry.getValue());
-                        }
-                    }
-                }
-            }
+    }
+
+    private static String configuration(String qualifiers) {
+        var match = DENSITY_VERSION.matcher(qualifiers.toLowerCase(Locale.ROOT));
+        if (!match.matches()) {
+            return qualifiers;
         }
+        String density = switch (match.group(1)) {
+            case null -> "";
+            case "mdpi" -> "160dpi";
+            case "hdpi" -> "240dpi";
+            case "xhdpi" -> "320dpi";
+            case "xxhdpi" -> "480dpi";
+            case "xxxhdpi" -> "640dpi";
+            case "anydpi" -> "65534dpi";
+            default -> match.group(1).replaceFirst("^0+", "");
+        };
+        // AAPT2 raises lower SDK qualifiers to API 4 for densities and API 21 for anydpi.
+        int minimum = switch (density) {
+            case "" -> 0;
+            case "65534dpi" -> 21;
+            default -> 4;
+        };
+        int version = match.group(2) == null ? 0 : Integer.parseInt(match.group(2));
+        return density + "-v" + Math.max(minimum, version);
     }
 
     private static String resourceName(Path path) {
