@@ -8,6 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.StringJoiner;
 import java.util.function.Supplier;
 
@@ -227,6 +228,19 @@ public final class IconSet {
     public List<Path> write(Path root) throws IOException {
         Path base = Objects.requireNonNull(root, "root").toAbsolutePath().normalize();
         return OutputFiles.write(base, files);
+    }
+
+    /**
+     * Writes outputs and records ownership for later stale-file checks. The catalog contains all absolute paths
+     * this generator can produce across modes. Cleanup protects the supplied inputs and user edits.
+     */
+    public List<Path> writeTracked(Path root, Set<Path> catalog, Set<Path> inputs, boolean clean) throws IOException {
+        return OutputFiles.writeTracked(root.toAbsolutePath().normalize(), files, catalog, inputs, clean);
+    }
+
+    /** Lists previously generated files still present outside the current selection, without writing. */
+    public List<Path> staleOutputs(Path root, Set<Path> catalog) throws IOException {
+        return new GeneratedFiles(root.toAbsolutePath().normalize(), catalog).stale(outputPaths(root));
     }
 
     /** Reasons an expected output failed its byte-for-byte check. */

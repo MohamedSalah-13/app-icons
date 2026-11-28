@@ -15,6 +15,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -163,6 +164,29 @@ class IconSetTest {
         try (var files = Files.list(root)) {
             assertEquals(3, files.count());
         }
+    }
+
+    @Test
+    @EnabledOnOs(OS.WINDOWS)
+    void restoresStaleFilesAndCurrentOutputsIfTheTrackingFileCannotBeReplaced() throws IOException {
+        Path stale = root.resolve("old.png");
+        Path current = root.resolve("current.png");
+        Set<Path> catalog = Set.of(stale, current);
+        IconSet.of(TestIcon.DRAWING).png("old.png", 16).png("current.png", 16)
+                .writeTracked(root, catalog, Set.of(), false);
+        Path index = root.resolve(".app-icons-generated");
+        byte[] originalIndex = Files.readAllBytes(index);
+        byte[] original = Files.readAllBytes(stale);
+        var next = IconSet.of(TestIcon.DRAWING).png("current.png", 64);
+        try (var handle = new RandomAccessFile(index.toFile(), "r")) {
+            assertThrows(IOException.class, () -> next.writeTracked(root, catalog, Set.of(), true));
+        }
+        assertArrayEquals(original, Files.readAllBytes(stale));
+        assertArrayEquals(original, Files.readAllBytes(current));
+        assertArrayEquals(originalIndex, Files.readAllBytes(index));
+        next.writeTracked(root, catalog, Set.of(), true);
+        assertFalse(Files.exists(stale));
+        assertTrue(next.check(root).isEmpty());
     }
 
     @Test

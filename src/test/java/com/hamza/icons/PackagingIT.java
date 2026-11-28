@@ -419,6 +419,7 @@ class PackagingIT {
         String jar = System.getProperty("cliJar");
         Files.writeString(folder.resolve("logo.svg"), SVG);
         Files.writeString(folder.resolve(".gitattributes"), """
+                .app-icons-generated text eol=lf
                 **/res/mipmap-anydpi-v26/ic_launcher.xml text eol=lf
                 **/res/drawable/ic_launcher_background.xml text eol=lf
                 """);
@@ -427,6 +428,8 @@ class PackagingIT {
         run(0, "git", "-c", "core.autocrlf=true", "add", "--", ".gitattributes", "logo.svg", "app");
         run(0, "git", "-c", "core.autocrlf=true", "checkout-index", "--all", "--prefix=checkout/");
         run(0, "java", "-jar", jar, "--check", "--android", "checkout/logo.svg", "checkout/app/src/main/res");
+        String stale = run(1, "java", "-jar", jar, "--check", "--preview", "checkout/logo.svg", "checkout/app/src/main/res");
+        assertTrue(stale.contains("STALE " + folder.resolve("checkout/app/src/main/res/mipmap-mdpi/ic_launcher.png")), stale);
     }
 
     @Test
@@ -512,7 +515,7 @@ class PackagingIT {
         run(0, "java", "-jar", jar, "--preview", "--background-color", "#17324d", "logo.svg", "preview");
         Path page = out.resolve("preview.html");
         try (var files = Files.list(out)) {
-            assertEquals(List.of(page), files.toList());
+            assertEquals(Set.of(page, out.resolve(".app-icons-generated")), Set.copyOf(files.toList()));
         }
         run(0, "java", "-jar", jar, "--check", "--preview", "--background-color", "#17324d", "logo.svg", "preview");
         byte[] standalone = Files.readAllBytes(page);
@@ -640,6 +643,89 @@ class PackagingIT {
     }
 
     @Test
+    void checkTracksAllFiveObsoleteMonochromeLayersUntilExplicitCleanup() throws Exception {
+        String jar = System.getProperty("cliJar");
+        Files.writeString(folder.resolve("logo.svg"), SVG);
+        run(0, "java", "-jar", jar, "--android", "--monochrome", "logo.svg", "logo.svg", "res");
+        Path res = folder.resolve("res");
+        Path user = Files.writeString(res.resolve("mipmap-mdpi/my_icon.png"), "mine");
+        Path index = res.resolve(".app-icons-generated");
+        FileTime time = Files.getLastModifiedTime(index);
+        String first = run(1, "java", "-jar", jar, "--android", "--check", "logo.svg", "res");
+        assertTrue(first.contains("DIFFERENT " + res.resolve("mipmap-anydpi-v26/ic_launcher.xml")), first);
+        assertEquals(time, Files.getLastModifiedTime(index));
+        run(0, "java", "-jar", jar, "--android", "logo.svg", "res");
+        String report = run(1, "java", "-jar", jar, "--android", "--check", "logo.svg", "res");
+        for (String density : List.of("mdpi", "hdpi", "xhdpi", "xxhdpi", "xxxhdpi")) {
+            Path stale = res.resolve("mipmap-" + density + "/ic_launcher_monochrome.png");
+            assertTrue(Files.isRegularFile(stale));
+            assertTrue(report.contains("STALE " + stale), report);
+        }
+        assertEquals(5, report.lines().count(), report);
+        run(0, "java", "-jar", jar, "--android", "--clean", "logo.svg", "res");
+        run(0, "java", "-jar", jar, "--android", "--check", "logo.svg", "res");
+        try (var files = Files.walk(res)) {
+            assertFalse(files.anyMatch(path -> path.endsWith("ic_launcher_monochrome.png")));
+        }
+        assertEquals("mine", Files.readString(user));
+        FileTime cleaned = Files.getLastModifiedTime(index);
+        run(0, "java", "-jar", jar, "--android", "--clean", "logo.svg", "res");
+        assertEquals(cleaned, Files.getLastModifiedTime(index));
+    }
+
+    @Test
+    void cleanupPreservesModifiedFilesInputsAndUnownedMatches() throws Exception {
+        String jar = System.getProperty("cliJar");
+        Path svg = Files.writeString(folder.resolve("logo.svg"), SVG);
+        run(0, "java", "-jar", jar, "--pwa", "logo.svg", "out");
+        Path out = folder.resolve("out");
+        Path index = out.resolve(".app-icons-generated");
+        byte[] originalIndex = Files.readAllBytes(index);
+        Path apple = out.resolve("apple-touch-icon.png");
+        Path edited = out.resolve("maskable-512.png");
+        byte[] original = Files.readAllBytes(edited);
+        Files.writeString(edited, "my replacement");
+        assertTrue(run(1, "java", "-jar", jar, "--clean", "--preview", "logo.svg", "out").contains(edited.toString()));
+        assertEquals("my replacement", Files.readString(edited));
+        assertTrue(Files.exists(apple));
+        assertFalse(Files.exists(out.resolve("preview.html")));
+        assertArrayEquals(originalIndex, Files.readAllBytes(index));
+        Files.write(edited, original);
+        Files.writeString(svg, SVG.replace("<rect", "<image href=\"out/apple-touch-icon.png\" width=\"32\" height=\"32\"/><rect"));
+        assertTrue(run(1, "java", "-jar", jar, "--clean", "--preview", "logo.svg", "out").contains("conflicts with input"));
+        assertTrue(Files.exists(apple));
+        assertArrayEquals(originalIndex, Files.readAllBytes(index));
+        Files.writeString(svg, SVG);
+        Path legacy = Files.createDirectory(folder.resolve("legacy"));
+        Path ownedByUser = Files.copy(apple, legacy.resolve("apple-touch-icon.png"));
+        run(0, "java", "-jar", jar, "--pwa", "logo.svg", "legacy");
+        run(0, "java", "-jar", jar, "--preview", "--clean", "logo.svg", "legacy");
+        assertArrayEquals(Files.readAllBytes(apple), Files.readAllBytes(ownedByUser));
+        run(0, "java", "-jar", jar, "--preview", "--check", "logo.svg", "legacy");
+    }
+
+    @Test
+    void invalidTrackingFileCannotAuthorizeCleanup() throws Exception {
+        String jar = System.getProperty("cliJar");
+        Files.writeString(folder.resolve("logo.svg"), SVG);
+        run(0, "java", "-jar", jar, "--preview", "logo.svg", "out");
+        Path out = folder.resolve("out");
+        Path index = out.resolve(".app-icons-generated");
+        String valid = Files.readString(index);
+        for (String name : List.of("../outside", "user.txt")) {
+            Path userFile = Files.copy(out.resolve("preview.html"), out.resolve(name));
+            String invalid = valid.replace("preview.html", name);
+            Files.writeString(index, invalid);
+            assertTrue(run(1, "java", "-jar", jar, "--check", "--preview", "logo.svg", "out").contains(index.toString()));
+            assertTrue(run(1, "java", "-jar", jar, "--clean", "logo.svg", "out").contains(index.toString()));
+            assertTrue(Files.exists(userFile));
+            assertEquals(invalid, Files.readString(index));
+            assertFalse(Files.exists(out.resolve("app.ico")));
+        }
+        run(2, "java", "-jar", jar, "--check", "--clean", "logo.svg", "out");
+    }
+
+    @Test
     void androidProtectsMonochromeSvgAndLinkedImagesFromOutputOverwrites() throws Exception {
         String jar = System.getProperty("cliJar");
         Files.writeString(folder.resolve("logo.svg"), SVG);
@@ -724,7 +810,7 @@ class PackagingIT {
         assertTrue(Files.readString(res.resolve("drawable/ic_launcher_background.xml")).contains("#17324D"));
         assertTrue(Files.readString(res.resolve("mipmap-anydpi-v26/ic_launcher.xml")).contains("@mipmap/ic_launcher_foreground"));
         try (var files = Files.walk(res)) {
-            assertEquals(12, files.filter(Files::isRegularFile).count());
+            assertEquals(12, files.filter(Files::isRegularFile).filter(path -> !path.endsWith(".app-icons-generated")).count());
         }
         args.add("--check");
         run(0, "java", args.toArray(String[]::new));

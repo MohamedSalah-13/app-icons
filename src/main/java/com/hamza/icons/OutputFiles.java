@@ -11,6 +11,7 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Supplier;
 
 import static java.nio.file.LinkOption.NOFOLLOW_LINKS;
@@ -24,29 +25,85 @@ final class OutputFiles implements AutoCloseable {
 
     // An overlapping write must not change a file between our comparison and commit.
     static synchronized List<Path> write(Path base, Map<String, Supplier<byte[]>> files) throws IOException {
-        if (files.isEmpty()) {
+        return writeBatch(base, targetsUnder(base, files), null, Map.of());
+    }
+
+    static synchronized List<Path> writeTracked(Path base, Map<String, Supplier<byte[]>> files,
+            Set<Path> possible, Set<Path> inputs, boolean clean) throws IOException {
+        Files.createDirectories(base);
+        // CREATE_NEW serializes separate CLI processes as well as calls in this JVM.
+        Path lock = Files.createFile(base.resolve(GeneratedFiles.LOCK));
+        try {
+            protectInput(base.resolve(GeneratedFiles.NAME), inputs);
+            var ownership = new GeneratedFiles(base, possible);
+            var targets = targetsUnder(base, files);
+            for (Path target : targets.keySet()) {
+                protectInput(target, inputs);
+            }
+            var removals = new LinkedHashMap<Path, String>();
+            for (Path stale : ownership.stale(targets.keySet())) {
+                if (clean) {
+                    protectInput(stale, inputs);
+                    removals.put(stale, ownership.takeForCleanup(stale));
+                }
+            }
+            return writeBatch(base, targets, ownership, removals);
+        } finally {
+            Files.delete(lock);
+        }
+    }
+
+    private static void protectInput(Path target, Set<Path> inputs) throws IOException {
+        if (Files.exists(target)) {
+            for (Path input : inputs) {
+                if (Files.isSameFile(target, input)) {
+                    throw new IOException("Output " + target + " conflicts with input file " + input);
+                }
+            }
+        }
+    }
+
+    private static List<Path> writeBatch(Path base, Map<Path, Supplier<byte[]>> targets,
+            GeneratedFiles ownership, Map<Path, String> removals) throws IOException {
+        if (targets.isEmpty() && ownership == null) {
             return new ArrayList<>();
         }
-        Map<Path, Supplier<byte[]>> targets = targetsUnder(base, files);
         Files.createDirectories(base);
         Path realBase = base.toRealPath();
         try (OutputFiles batch = new OutputFiles()) {
             for (var entry : targets.entrySet()) {
                 Path target = entry.getKey();
-                Path parent = target.getParent();
-                checkParent(base, realBase, parent);
+                checkParent(base, realBase, target.getParent());
                 byte[] expected = entry.getValue().get();
-                if (Files.isRegularFile(target, NOFOLLOW_LINKS) && matches(target, Files.size(target), expected)) {
-                    continue;
+                boolean changed = batch.stage(target, expected);
+                if (ownership != null) {
+                    ownership.record(target, expected, changed);
                 }
-                Files.createDirectories(parent);
-                Output output = new Output(target, Files.createTempDirectory(parent, ".app-icons-"));
-                batch.outputs.add(output);
-                Files.write(output.next(), expected);
+            }
+            for (var entry : removals.entrySet()) {
+                batch.prepare(entry.getKey(), entry.getValue());
+            }
+            if (ownership != null) {
+                batch.stage(ownership.index, ownership.contents());
             }
             commit(batch.outputs);
             return new ArrayList<>(targets.keySet());
         }
+    }
+
+    private boolean stage(Path target, byte[] expected) throws IOException {
+        if (Files.isRegularFile(target, NOFOLLOW_LINKS) && matches(target, Files.size(target), expected)) {
+            return false;
+        }
+        Files.createDirectories(target.getParent());
+        Files.write(prepare(target, null).next(), expected);
+        return true;
+    }
+
+    private Output prepare(Path target, String removalHash) throws IOException {
+        Output output = new Output(target, Files.createTempDirectory(target.getParent(), ".app-icons-"), removalHash);
+        outputs.add(output);
+        return output;
     }
 
     static Map<Path, IconSet.Difference> check(Path base, Map<String, Supplier<byte[]>> files) throws IOException {
@@ -121,10 +178,14 @@ final class OutputFiles implements AutoCloseable {
                 if (!Files.isWritable(output.target)) {
                     throw new IOException("Output file is read-only: " + output.target);
                 }
-                Files.copy(output.target, output.previous(), COPY_ATTRIBUTES);
-                var permissions = Files.getFileAttributeView(output.target, PosixFileAttributeView.class);
-                if (permissions != null) {
-                    Files.setPosixFilePermissions(output.next(), permissions.readAttributes().permissions());
+                if (output.removalHash == null) {
+                    Files.copy(output.target, output.previous(), COPY_ATTRIBUTES);
+                    var permissions = Files.getFileAttributeView(output.target, PosixFileAttributeView.class);
+                    if (permissions != null) {
+                        Files.setPosixFilePermissions(output.next(), permissions.readAttributes().permissions());
+                    }
+                } else if (!GeneratedFiles.matchesRecordedFile(output.target, output.removalHash)) {
+                    throw new IOException("Refusing to remove modified generated file: " + output.target);
                 }
                 output.hadOriginal = true;
             }
@@ -132,8 +193,18 @@ final class OutputFiles implements AutoCloseable {
         int replaced = 0;
         try {
             for (Output output : outputs) {
-                Files.move(output.next(), output.target, ATOMIC_MOVE, REPLACE_EXISTING);
-                replaced++;
+                if (output.removalHash == null) {
+                    Files.move(output.next(), output.target, ATOMIC_MOVE, REPLACE_EXISTING);
+                    replaced++;
+                } else {
+                    Files.move(output.target, output.previous(), ATOMIC_MOVE);
+                    output.hadOriginal = true;
+                    replaced++;
+                    // Verify the actual file we moved. A mismatch restores it along with the rest of the batch.
+                    if (!GeneratedFiles.matchesRecordedFile(output.previous(), output.removalHash)) {
+                        throw new IOException("Refusing to remove modified generated file: " + output.target);
+                    }
+                }
             }
         } catch (IOException | RuntimeException failure) {
             for (int i = replaced - 1; i >= 0; i--) {
@@ -180,12 +251,14 @@ final class OutputFiles implements AutoCloseable {
     private static final class Output {
         final Path target;
         final Path directory;
+        final String removalHash;
         boolean hadOriginal;
         boolean keepBackup;
 
-        Output(Path target, Path directory) {
+        Output(Path target, Path directory, String removalHash) {
             this.target = target;
             this.directory = directory;
+            this.removalHash = removalHash;
         }
 
         Path next() {

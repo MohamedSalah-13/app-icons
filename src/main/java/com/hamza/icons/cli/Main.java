@@ -17,7 +17,7 @@ import java.util.Set;
 
 /** Command-line entry point for the standalone CLI jar. */
 public final class Main {
-    private static final String USAGE = "Usage: java -jar app-icons-<version>-cli.jar [--check] [--preview] "
+    private static final String USAGE = "Usage: java -jar app-icons-<version>-cli.jar [--check | --clean] [--preview] "
             + "[--android [--foreground <file.svg>] [--monochrome <file.svg>]] [--pwa [--manifest-template <file>]] "
             + "[--background-color <#RRGGBB>] <input.svg> <output-directory>";
 
@@ -43,6 +43,8 @@ public final class Main {
             System.out.println("--manifest-template preserves custom manifest fields and replaces the top-level icons array.");
             System.out.println("--background-color sets the Android adaptive, maskable and Apple touch backgrounds (default: #ffffff).");
             System.out.println("--check compares expected files without writing. Exit 0 for a match, 1 for differences or errors.");
+            System.out.println("--check also reports STALE files from earlier generations.");
+            System.out.println("--clean generates the selected outputs and removes unchanged, previously generated stale files.");
             return 0;
         }
         Options options;
@@ -75,15 +77,18 @@ public final class Main {
                 // A template changes the manifest contents, never the planned output paths.
                 icons = options.iconSet(drawing, foreground, monochrome, Files.readString(options.template()));
             }
+            Set<Path> catalog = allOutputPaths(output);
             if (options.check()) {
                 var differences = icons.check(output);
+                var stale = icons.staleOutputs(output, catalog);
                 differences.forEach((path, reason) -> System.err.println(reason + " " + path));
-                if (!differences.isEmpty()) {
+                stale.forEach(path -> System.err.println("STALE " + path));
+                if (!differences.isEmpty() || !stale.isEmpty()) {
                     return 1;
                 }
                 System.out.println("All expected files match.");
             } else {
-                icons.write(output).forEach(System.out::println);
+                icons.writeTracked(output, catalog, inputs, options.clean()).forEach(System.out::println);
             }
             return 0;
         } catch (IOException | IllegalArgumentException e) {
@@ -105,7 +110,20 @@ public final class Main {
         }
     }
 
-    private record Options(Path input, Path output, boolean pwa, boolean check, boolean preview,
+    private static Set<Path> allOutputPaths(Path root) {
+        // Enumerate the same presets without rendering. A tracking file cannot authorize arbitrary paths.
+        IconDrawing drawing = (g, size) -> {};
+        var catalog = IconSet.of(drawing);
+        desktop(catalog).pwa("App").androidLauncher("").androidAdaptive("", drawing, Color.WHITE, Color.WHITE, drawing)
+                .preview(Color.WHITE);
+        return Set.copyOf(catalog.outputPaths(root));
+    }
+
+    private static IconSet desktop(IconSet icons) {
+        return icons.ico("app.ico").icns("app.icns").png("app.png", 512).pngs("png/icon-%d.png");
+    }
+
+    private record Options(Path input, Path output, boolean pwa, boolean check, boolean clean, boolean preview,
                            boolean android, Path foreground, Path monochrome, Path template, Color background) {
         static Options parse(String[] args) {
             List<String> paths = new ArrayList<>(2);
@@ -124,7 +142,7 @@ public final class Main {
                     throw new IllegalArgumentException("Repeated option: " + arg);
                 }
                 switch (arg) {
-                    case "--pwa", "--check", "--preview", "--android" -> { }
+                    case "--pwa", "--check", "--clean", "--preview", "--android" -> { }
                     case "--foreground" -> foreground = Path.of(value(args, ++i, arg));
                     case "--monochrome" -> monochrome = Path.of(value(args, ++i, arg));
                     case "--manifest-template" -> template = Path.of(value(args, ++i, arg));
@@ -141,6 +159,9 @@ public final class Main {
             boolean pwa = flags.contains("--pwa");
             boolean preview = flags.contains("--preview");
             boolean android = flags.contains("--android");
+            if (flags.contains("--check") && flags.contains("--clean")) {
+                throw new IllegalArgumentException("--check and --clean cannot be combined");
+            }
             if (!android && foreground != null) {
                 throw new IllegalArgumentException("--foreground requires --android");
             }
@@ -156,7 +177,7 @@ public final class Main {
             if (paths.size() != 2) {
                 throw new IllegalArgumentException("Expected the SVG path and output directory");
             }
-            return new Options(Path.of(paths.get(0)), Path.of(paths.get(1)), pwa, flags.contains("--check"), preview,
+            return new Options(Path.of(paths.get(0)), Path.of(paths.get(1)), pwa, flags.contains("--check"), flags.contains("--clean"), preview,
                     android, foreground, monochrome, template, background);
         }
 
@@ -177,7 +198,7 @@ public final class Main {
                 String name = input.getFileName().toString().replaceFirst("(?i)\\.svg$", "").strip();
                 icons.pwa(name.isEmpty() ? "App" : name, background, manifestTemplate);
             } else if (!preview && !android) {
-                icons.ico("app.ico").icns("app.icns").png("app.png", 512).pngs("png/icon-%d.png");
+                desktop(icons);
             }
             if (preview) {
                 if (android) {

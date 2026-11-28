@@ -66,6 +66,7 @@ jobs:
         with:
           name: windows-pwa-preview
           path: target/platform-check/
+          include-hidden-files: true
           if-no-files-found: error
 
   platform-check:
