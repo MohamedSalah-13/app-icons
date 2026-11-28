@@ -1,0 +1,13 @@
+    .android #safe-guide { accent-color: #385d40; margin: 0 4px 12px 0; }
+    .android-mask {
+      position: relative; width: 144px; height: 144px;
+      overflow: hidden; background-color: var(--android-background);
+    }
+    /* The launcher viewport shows the middle 72 dp of each 108 dp layer. */
+    .android-layer { position: absolute; top: -25%; left: -25%; }
+    .android-mask::after {
+      content: ""; position: absolute; inset: calc(100% * 3 / 72);
+      border-radius: 50%; border: 2px dashed #fff; box-shadow: 0 0 0 1px #252923;
+      pointer-events: none;
+    }
+    #safe-guide:not(:checked) ~ .grid .android-mask::after { display: none; }

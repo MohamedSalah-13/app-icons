@@ -502,6 +502,61 @@ class PackagingIT {
     }
 
     @Test
+    void androidPreviewUsesGeneratedLayersAndCheckDetectsAForegroundChange() throws Exception {
+        String jar = System.getProperty("cliJar");
+        Files.writeString(folder.resolve("logo.svg"), SVG);
+        Files.writeString(folder.resolve("mark.svg"), SVG.replace("#ff0000", "#00ff00"));
+        Files.writeString(folder.resolve("alternate.svg"), SVG.replace("#ff0000", "#0000ff"));
+        var args = new ArrayList<>(List.of("-jar", jar, "--android", "--preview", "--background-color", "#17324d",
+                "--foreground", "mark.svg", "logo.svg", "res"));
+        run(0, "java", args.toArray(String[]::new));
+        Path res = folder.resolve("res");
+        Path preview = res.resolve("preview.html");
+        Path legacy = res.resolve("mipmap-xhdpi/ic_launcher.png");
+        Path layer = res.resolve("mipmap-xhdpi/ic_launcher_foreground.png");
+        byte[] originalPreview = Files.readAllBytes(preview);
+        byte[] originalLayer = Files.readAllBytes(layer);
+        var document = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(preview.toFile());
+        var images = document.getElementsByTagName("img");
+        assertEquals(3, images.getLength());
+        String prefix = "data:image/png;base64,";
+        for (int i = 0; i < images.getLength(); i++) {
+            Element img = (Element) images.item(i);
+            String src = img.getAttribute("src");
+            assertTrue(src.startsWith(prefix));
+            assertArrayEquals(i == 0 ? Files.readAllBytes(legacy) : originalLayer,
+                    Base64.getDecoder().decode(src.substring(prefix.length())));
+        }
+        assertEquals("android-mask circle", ((Element) images.item(1).getParentNode()).getAttribute("class"));
+        assertEquals("android-mask rounded-square", ((Element) images.item(2).getParentNode()).getAttribute("class"));
+        assertEquals("--android-background: #17324D",
+                ((Element) document.getElementsByTagName("section").item(0)).getAttribute("style"));
+        assertEquals("safe-guide", ((Element) document.getElementsByTagName("input").item(0)).getAttribute("id"));
+        args.add("--check");
+        run(0, "java", args.toArray(String[]::new));
+        args.set(args.indexOf("mark.svg"), "alternate.svg");
+        String report = run(1, "java", args.toArray(String[]::new));
+        assertTrue(report.contains("DIFFERENT " + preview), report);
+        assertTrue(report.contains("DIFFERENT " + layer), report);
+        assertFalse(report.contains("DIFFERENT " + legacy), report);
+        assertArrayEquals(originalPreview, Files.readAllBytes(preview));
+        assertArrayEquals(originalLayer, Files.readAllBytes(layer));
+    }
+
+    @Test
+    void combinedPreviewIncludesAndroidAndPwaOnTheSamePage() throws Exception {
+        String jar = System.getProperty("cliJar");
+        Files.writeString(folder.resolve("logo.svg"), SVG);
+        run(0, "java", "-jar", jar, "--android", "--pwa", "--preview", "logo.svg", "out");
+        Path out = folder.resolve("out");
+        var document = DocumentBuilderFactory.newInstance().newDocumentBuilder()
+                .parse(out.resolve("preview.html").toFile());
+        assertEquals(8, document.getElementsByTagName("img").getLength());
+        assertTrue(Files.isRegularFile(out.resolve("manifest.webmanifest")));
+        run(0, "java", "-jar", jar, "--check", "--android", "--pwa", "--preview", "logo.svg", "out");
+    }
+
+    @Test
     void checkReportsAnOutdatedOrMissingPreviewWithoutRewritingIt() throws Exception {
         String jar = System.getProperty("cliJar");
         Files.writeString(folder.resolve("logo.svg"), SVG);

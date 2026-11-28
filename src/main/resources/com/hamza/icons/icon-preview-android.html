@@ -1,0 +1,23 @@
+    <section class="android" aria-labelledby="android-heading" style="--android-background: {{background}}">
+      <h2 id="android-heading">Android launcher icons</h2>
+      <input type="checkbox" id="safe-guide" checked="checked" />
+      <label for="safe-guide">Show the 66 dp safe zone</label>
+      <div class="grid">
+        <figure>
+          <div class="sample"><img src="{{legacy}}" width="96" height="96" alt="Legacy launcher icon" /></div>
+          <figcaption>Legacy icon<span>48 dp · xhdpi</span></figcaption>
+        </figure>
+        <figure>
+          <div class="sample">
+            <div class="android-mask circle"><img class="android-layer" src="{{foreground}}" width="216" height="216" alt="Adaptive icon with a circular crop" /></div>
+          </div>
+          <figcaption>Adaptive · Circle<span>72 dp viewport</span></figcaption>
+        </figure>
+        <figure>
+          <div class="sample">
+            <div class="android-mask rounded-square"><img class="android-layer" src="{{foreground}}" width="216" height="216" alt="Adaptive icon with a rounded-square crop" /></div>
+          </div>
+          <figcaption>Adaptive · Rounded square<span>72 dp viewport</span></figcaption>
+        </figure>
+      </div>
+    </section>

@@ -180,6 +180,13 @@ public final class IconSet {
         return file("preview.html", () -> IconPreview.html(drawing, background));
     }
 
+    /** Adds an Android launcher preview and optionally the web icon previews on the same page. */
+    public IconSet androidPreview(IconDrawing foreground, Color background, boolean includeWeb) {
+        Objects.requireNonNull(foreground, "foreground");
+        checkOpaqueBackground(background);
+        return file("preview.html", () -> IconPreview.androidHtml(drawing, foreground, background, includeWeb));
+    }
+
     private static void checkOpaqueBackground(Color background) {
         if (Objects.requireNonNull(background, "background").getAlpha() != 255) {
             throw new IllegalArgumentException("The PWA icon background must be opaque");

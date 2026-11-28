@@ -38,7 +38,7 @@ public final class Main {
             System.out.println("--pwa writes web icons, maskable icons, apple-touch-icon.png and manifest.webmanifest.");
             System.out.println("--android writes legacy and adaptive launcher icons into an Android res directory.");
             System.out.println("--foreground supplies a separate adaptive foreground SVG (default: input SVG).");
-            System.out.println("--preview writes a self-contained preview.html. Combine with --pwa to also write web icons.");
+            System.out.println("--preview writes a self-contained preview.html with Android views when --android is set.");
             System.out.println("--manifest-template preserves custom manifest fields and replaces the top-level icons array.");
             System.out.println("--background-color sets the Android adaptive, maskable and Apple touch backgrounds (default: #ffffff).");
             System.out.println("--check compares expected files without writing. Exit 0 for a match, 1 for differences or errors.");
@@ -172,7 +172,11 @@ public final class Main {
                 icons.ico("app.ico").icns("app.icns").png("app.png", 512).pngs("png/icon-%d.png");
             }
             if (preview) {
-                icons.preview(background);
+                if (android) {
+                    icons.androidPreview(foregroundDrawing, background, pwa);
+                } else {
+                    icons.preview(background);
+                }
             }
             return icons;
         }
