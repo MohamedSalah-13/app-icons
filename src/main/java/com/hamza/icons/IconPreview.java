@@ -14,11 +14,16 @@ final class IconPreview {
         return page(webSection(drawing, background), "");
     }
 
-    static byte[] androidHtml(IconDrawing drawing, IconDrawing foreground, Color background, boolean includeWeb) {
+    static byte[] androidHtml(IconDrawing drawing, IconDrawing foreground, Color background, boolean includeWeb,
+                              IconDrawing monochrome) {
         int density = 2; // xhdpi: use the same pixel sizes as the generated Android files.
+        int layerSize = AndroidRes.LAYER_PIXELS[density];
+        String foregroundPng = pngUrl(Images.png(foreground.render(layerSize)));
+        String monochromePng = monochrome == null ? foregroundPng : pngUrl(Images.png(monochrome.render(layerSize)));
         String android = template("icon-preview-android.html")
                 .replace("{{legacy}}", pngUrl(Images.png(drawing.render(AndroidRes.ICON_PIXELS[density]))))
-                .replace("{{foreground}}", pngUrl(Images.png(foreground.render(AndroidRes.LAYER_PIXELS[density]))))
+                .replace("{{foreground}}", foregroundPng)
+                .replace("{{monochrome}}", monochromePng)
                 .replace("{{background}}", AndroidRes.color(background));
         return page(includeWeb ? android + webSection(drawing, background) : android,
                 template("icon-preview-android.css"));

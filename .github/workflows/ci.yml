@@ -112,7 +112,7 @@ jobs:
             sdkmanager 'build-tools;35.0.0' 'platforms;android-35'
           fi
           app=target/android-sample
-          java -jar target/platform-check/*-cli.jar --android .github/fixtures/ci-icon.svg "$app/res"
+          java -jar target/platform-check/*-cli.jar --android --monochrome .github/fixtures/ci-icon.svg .github/fixtures/ci-icon.svg "$app/res"
           "$aapt2" compile --dir "$app/res" -o "$app/resources.zip"
           "$aapt2" link -I "$platform" \
             --manifest .github/fixtures/android/AndroidManifest.xml --min-sdk-version 21 \

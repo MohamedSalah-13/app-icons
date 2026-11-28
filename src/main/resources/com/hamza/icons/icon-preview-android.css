@@ -5,6 +5,11 @@
     }
     /* The launcher viewport shows the middle 72 dp of each 108 dp layer. */
     .android-layer { position: absolute; top: -25%; left: -25%; }
+    .android-themed { background-color: #d6e8ff; }
+    .android-tint {
+      width: 150%; height: 150%; background-color: #123b62;
+      mask-image: var(--monochrome); mask-mode: alpha; mask-size: 100% 100%; mask-repeat: no-repeat;
+    }
     .android-mask::after {
       content: ""; position: absolute; inset: calc(100% * 3 / 72);
       border-radius: 50%; border: 2px dashed #fff; box-shadow: 0 0 0 1px #252923;

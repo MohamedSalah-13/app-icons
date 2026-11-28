@@ -18,7 +18,7 @@ import java.util.Set;
 /** Command-line entry point for the standalone CLI jar. */
 public final class Main {
     private static final String USAGE = "Usage: java -jar app-icons-<version>-cli.jar [--check] [--preview] "
-            + "[--android [--foreground <file.svg>]] [--pwa [--manifest-template <file>]] "
+            + "[--android [--foreground <file.svg>] [--monochrome <file.svg>]] [--pwa [--manifest-template <file>]] "
             + "[--background-color <#RRGGBB>] <input.svg> <output-directory>";
 
     private Main() {
@@ -38,6 +38,7 @@ public final class Main {
             System.out.println("--pwa writes web icons, maskable icons, apple-touch-icon.png and manifest.webmanifest.");
             System.out.println("--android writes legacy and adaptive launcher icons into an Android res directory.");
             System.out.println("--foreground supplies a separate adaptive foreground SVG (default: input SVG).");
+            System.out.println("--monochrome supplies a separate themed icon SVG (default: adaptive foreground).");
             System.out.println("--preview writes a self-contained preview.html with Android views when --android is set.");
             System.out.println("--manifest-template preserves custom manifest fields and replaces the top-level icons array.");
             System.out.println("--background-color sets the Android adaptive, maskable and Apple touch backgrounds (default: #ffffff).");
@@ -60,7 +61,8 @@ public final class Main {
             Set<Path> inputs = new LinkedHashSet<>();
             IconDrawing drawing = SvgDrawing.of(input, inputs::add);
             IconDrawing foreground = options.foreground() == null ? drawing : SvgDrawing.of(options.foreground(), inputs::add);
-            IconSet icons = options.iconSet(drawing, foreground, null);
+            IconDrawing monochrome = options.monochrome() == null ? null : SvgDrawing.of(options.monochrome(), inputs::add);
+            IconSet icons = options.iconSet(drawing, foreground, monochrome, null);
             if (options.template() != null) {
                 inputs.add(options.template());
             }
@@ -71,7 +73,7 @@ public final class Main {
             }
             if (options.template() != null) {
                 // A template changes the manifest contents, never the planned output paths.
-                icons = options.iconSet(drawing, foreground, Files.readString(options.template()));
+                icons = options.iconSet(drawing, foreground, monochrome, Files.readString(options.template()));
             }
             if (options.check()) {
                 var differences = icons.check(output);
@@ -104,12 +106,13 @@ public final class Main {
     }
 
     private record Options(Path input, Path output, boolean pwa, boolean check, boolean preview,
-                           boolean android, Path foreground, Path template, Color background) {
+                           boolean android, Path foreground, Path monochrome, Path template, Color background) {
         static Options parse(String[] args) {
             List<String> paths = new ArrayList<>(2);
             Set<String> flags = new HashSet<>();
             Path template = null;
             Path foreground = null;
+            Path monochrome = null;
             Color background = Color.WHITE;
             for (int i = 0; i < args.length; i++) {
                 String arg = args[i];
@@ -123,6 +126,7 @@ public final class Main {
                 switch (arg) {
                     case "--pwa", "--check", "--preview", "--android" -> { }
                     case "--foreground" -> foreground = Path.of(value(args, ++i, arg));
+                    case "--monochrome" -> monochrome = Path.of(value(args, ++i, arg));
                     case "--manifest-template" -> template = Path.of(value(args, ++i, arg));
                     case "--background-color" -> {
                         String color = value(args, ++i, arg);
@@ -140,6 +144,9 @@ public final class Main {
             if (!android && foreground != null) {
                 throw new IllegalArgumentException("--foreground requires --android");
             }
+            if (!android && monochrome != null) {
+                throw new IllegalArgumentException("--monochrome requires --android");
+            }
             if (!pwa && template != null) {
                 throw new IllegalArgumentException("Manifest templates require --pwa");
             }
@@ -150,7 +157,7 @@ public final class Main {
                 throw new IllegalArgumentException("Expected the SVG path and output directory");
             }
             return new Options(Path.of(paths.get(0)), Path.of(paths.get(1)), pwa, flags.contains("--check"), preview,
-                    android, foreground, template, background);
+                    android, foreground, monochrome, template, background);
         }
 
         private static String value(String[] args, int index, String option) {
@@ -160,10 +167,11 @@ public final class Main {
             return args[index];
         }
 
-        IconSet iconSet(IconDrawing drawing, IconDrawing foregroundDrawing, String manifestTemplate) {
+        IconSet iconSet(IconDrawing drawing, IconDrawing foregroundDrawing, IconDrawing monochromeDrawing,
+                        String manifestTemplate) {
             IconSet icons = IconSet.of(drawing);
             if (android) {
-                icons.androidLauncher("").androidAdaptive("", foregroundDrawing, background);
+                icons.androidLauncher("").androidAdaptive("", foregroundDrawing, background, background, monochromeDrawing);
             }
             if (pwa) {
                 String name = input.getFileName().toString().replaceFirst("(?i)\\.svg$", "").strip();
@@ -173,7 +181,7 @@ public final class Main {
             }
             if (preview) {
                 if (android) {
-                    icons.androidPreview(foregroundDrawing, background, pwa);
+                    icons.androidPreview(foregroundDrawing, background, pwa, monochromeDrawing);
                 } else {
                     icons.preview(background);
                 }

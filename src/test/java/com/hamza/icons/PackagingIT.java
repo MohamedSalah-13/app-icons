@@ -532,6 +532,11 @@ class PackagingIT {
         assertEquals("--android-background: #17324D",
                 ((Element) document.getElementsByTagName("section").item(0)).getAttribute("style"));
         assertEquals("safe-guide", ((Element) document.getElementsByTagName("input").item(0)).getAttribute("id"));
+        assertTrue(Files.readString(preview).contains("--monochrome: url('" + prefix
+                + Base64.getEncoder().encodeToString(originalLayer) + "')"));
+        assertTrue(Files.readString(res.resolve("mipmap-anydpi-v26/ic_launcher.xml"))
+                .contains("<monochrome android:drawable=\"@mipmap/ic_launcher_foreground\""));
+        assertFalse(Files.exists(res.resolve("mipmap-xhdpi/ic_launcher_monochrome.png")));
         args.add("--check");
         run(0, "java", args.toArray(String[]::new));
         args.set(args.indexOf("mark.svg"), "alternate.svg");
@@ -541,6 +546,79 @@ class PackagingIT {
         assertFalse(report.contains("DIFFERENT " + legacy), report);
         assertArrayEquals(originalPreview, Files.readAllBytes(preview));
         assertArrayEquals(originalLayer, Files.readAllBytes(layer));
+    }
+
+    @Test
+    void androidUsesSeparateMonochromeForResourcesAndThemedPreview() throws Exception {
+        String jar = System.getProperty("cliJar");
+        Files.writeString(folder.resolve("logo.svg"), SVG);
+        Path monochrome = Files.writeString(folder.resolve("mono.svg"), SVG.replace("#ff0000", "#000000"));
+        var args = new ArrayList<>(List.of("-jar", jar, "--android", "--preview", "--monochrome", "mono.svg",
+                "logo.svg", "res"));
+        run(0, "java", args.toArray(String[]::new));
+        Path res = folder.resolve("res");
+        Path preview = res.resolve("preview.html");
+        assertTrue(Files.readString(res.resolve("mipmap-anydpi-v26/ic_launcher.xml"))
+                .contains("<monochrome android:drawable=\"@mipmap/ic_launcher_monochrome\""));
+        String[] densities = {"mdpi", "hdpi", "xhdpi", "xxhdpi", "xxxhdpi"};
+        int[] sizes = {108, 162, 216, 324, 432};
+        for (int i = 0; i < densities.length; i++) {
+            Path png = res.resolve("mipmap-" + densities[i] + "/ic_launcher_monochrome.png");
+            var image = ImageIO.read(png.toFile());
+            assertEquals(sizes[i], image.getWidth());
+            assertEquals(sizes[i], image.getHeight());
+            assertEquals(0xff000000, image.getRGB(0, 0));
+            assertEquals(0, image.getRGB(sizes[i] - 1, 0) >>> 24);
+        }
+        Path layer = res.resolve("mipmap-xhdpi/ic_launcher_monochrome.png");
+        byte[] oldLayer = Files.readAllBytes(layer);
+        byte[] oldPreview = Files.readAllBytes(preview);
+        String data = Base64.getEncoder().encodeToString(oldLayer);
+        assertTrue(Files.readString(preview).contains("--monochrome: url('data:image/png;base64," + data + "')"));
+        assertTrue(Files.readString(preview).contains("mask-mode: alpha"));
+        args.add("--check");
+        run(0, "java", args.toArray(String[]::new));
+        Files.writeString(monochrome, SVG.replace("width=\"16\"", "width=\"8\""));
+        String diff = run(1, "java", args.toArray(String[]::new));
+        assertTrue(diff.contains("DIFFERENT " + preview), diff);
+        assertTrue(diff.contains("DIFFERENT " + layer), diff);
+        assertFalse(diff.contains("ic_launcher_foreground.png"), diff);
+        assertArrayEquals(oldPreview, Files.readAllBytes(preview));
+        assertArrayEquals(oldLayer, Files.readAllBytes(layer));
+        Files.delete(layer);
+        String missing = run(1, "java", args.toArray(String[]::new));
+        assertTrue(missing.contains("MISSING " + layer), missing);
+        assertFalse(Files.exists(layer));
+        run(2, "java", "-jar", jar, "--monochrome", "mono.svg", "logo.svg", "res");
+    }
+
+    @Test
+    void androidProtectsMonochromeSvgAndLinkedImagesFromOutputOverwrites() throws Exception {
+        String jar = System.getProperty("cliJar");
+        Files.writeString(folder.resolve("logo.svg"), SVG);
+        Path res = Files.createDirectory(folder.resolve("res"));
+        Path preview = Files.writeString(res.resolve("preview.html"), SVG);
+        String svgConflict = run(1, "java", "-jar", jar, "--android", "--preview", "--monochrome",
+                "res/preview.html", "logo.svg", "res");
+        assertTrue(svgConflict.contains("conflicts with input file") && svgConflict.contains("preview.html"), svgConflict);
+        assertEquals(SVG, Files.readString(preview));
+        try (var files = Files.list(res)) {
+            assertEquals(List.of(preview), files.toList());
+        }
+        Path layer = Files.createDirectories(res.resolve("mipmap-mdpi")).resolve("ic_launcher_monochrome.png");
+        ImageIO.write(new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB), "png", layer.toFile());
+        byte[] original = Files.readAllBytes(layer);
+        Files.writeString(folder.resolve("mono.svg"), """
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
+                  <image href="res/mipmap-mdpi/ic_launcher_monochrome.png" width="16" height="16"/>
+                </svg>
+                """);
+        String generate = run(1, "java", "-jar", jar, "--android", "--monochrome", "mono.svg", "logo.svg", "res");
+        String check = run(1, "java", "-jar", jar, "--check", "--android", "--monochrome", "mono.svg", "logo.svg", "res");
+        assertEquals(generate, check);
+        assertTrue(generate.contains("conflicts with input file") && generate.contains(layer.toString()), generate);
+        assertArrayEquals(original, Files.readAllBytes(layer));
+        assertFalse(Files.exists(res.resolve("drawable")));
     }
 
     @Test

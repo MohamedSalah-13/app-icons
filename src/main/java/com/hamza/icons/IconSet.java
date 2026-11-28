@@ -126,6 +126,11 @@ public final class IconSet {
      * @param bottom     its colour at the bottom; the same colour for a plain background
      */
     public IconSet androidAdaptive(String res, IconDrawing foreground, Color top, Color bottom) {
+        return androidAdaptive(res, foreground, top, bottom, null);
+    }
+
+    /** Adds an adaptive icon with an optional separate 108 dp monochrome layer. Null reuses the foreground. */
+    public IconSet androidAdaptive(String res, IconDrawing foreground, Color top, Color bottom, IconDrawing monochrome) {
         Objects.requireNonNull(res, "res");
         Objects.requireNonNull(foreground, "foreground");
         Objects.requireNonNull(top, "top");
@@ -134,9 +139,13 @@ public final class IconSet {
             int pixels = AndroidRes.LAYER_PIXELS[density];
             file(AndroidRes.mipmap(res, density, AndroidRes.NAME + "_foreground.png"),
                     () -> Images.png(foreground.render(pixels)));
+            if (monochrome != null) {
+                file(AndroidRes.mipmap(res, density, AndroidRes.NAME + "_monochrome.png"),
+                        () -> Images.png(monochrome.render(pixels)));
+            }
         }
         file(AndroidRes.path(res, "mipmap-anydpi-v26/" + AndroidRes.NAME + ".xml"),
-                () -> AndroidRes.adaptiveIcon().getBytes(StandardCharsets.UTF_8));
+                () -> AndroidRes.adaptiveIcon(monochrome != null).getBytes(StandardCharsets.UTF_8));
         file(AndroidRes.path(res, "drawable/" + AndroidRes.NAME + "_background.xml"),
                 () -> AndroidRes.background(top, bottom).getBytes(StandardCharsets.UTF_8));
         return this;
@@ -182,9 +191,14 @@ public final class IconSet {
 
     /** Adds an Android launcher preview and optionally the web icon previews on the same page. */
     public IconSet androidPreview(IconDrawing foreground, Color background, boolean includeWeb) {
+        return androidPreview(foreground, background, includeWeb, null);
+    }
+
+    /** Adds a themed launcher preview using the monochrome drawing, or the foreground when it is null. */
+    public IconSet androidPreview(IconDrawing foreground, Color background, boolean includeWeb, IconDrawing monochrome) {
         Objects.requireNonNull(foreground, "foreground");
         checkOpaqueBackground(background);
-        return file("preview.html", () -> IconPreview.androidHtml(drawing, foreground, background, includeWeb));
+        return file("preview.html", () -> IconPreview.androidHtml(drawing, foreground, background, includeWeb, monochrome));
     }
 
     private static void checkOpaqueBackground(Color background) {

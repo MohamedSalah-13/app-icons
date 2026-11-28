@@ -26,14 +26,15 @@ final class AndroidRes {
         return res.isEmpty() || res.endsWith("/") ? res + file : res + "/" + file;
     }
 
-    /** The adaptive icon: its two layers, and the foreground again as what a themed launcher tints. */
-    static String adaptiveIcon() {
+    /** The adaptive icon and the layer a themed launcher tints. */
+    static String adaptiveIcon(boolean separateMonochrome) {
+        String monochrome = separateMonochrome ? "_monochrome" : "_foreground";
         return "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
                 + WRITTEN_BY
                 + "<adaptive-icon xmlns:android=\"http://schemas.android.com/apk/res/android\">\n"
                 + "    <background android:drawable=\"@drawable/" + NAME + "_background\"/>\n"
                 + "    <foreground android:drawable=\"@mipmap/" + NAME + "_foreground\"/>\n"
-                + "    <monochrome android:drawable=\"@mipmap/" + NAME + "_foreground\"/>\n"
+                + "    <monochrome android:drawable=\"@mipmap/" + NAME + monochrome + "\"/>\n"
                 + "</adaptive-icon>\n";
     }
 
