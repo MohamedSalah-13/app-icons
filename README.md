@@ -12,13 +12,13 @@
 
 ## تحويل SVG من سطر الأوامر
 
-نزّل [ملف CLI للإصدار v0.10.3](https://github.com/MohamedSalah-13/app-icons/releases/download/v0.10.3/app-icons-0.10.3-cli.jar)، ثم شغّله باستخدام Java 21 فأحدث:
+نزّل [ملف CLI للإصدار v0.10.4](https://github.com/MohamedSalah-13/app-icons/releases/download/v0.10.4/app-icons-0.10.4-cli.jar)، ثم شغّله باستخدام Java 21 فأحدث:
 
 ```shell
-java -jar app-icons-0.10.3-cli.jar logo.svg output
+java -jar app-icons-0.10.4-cli.jar logo.svg output
 ```
 
-للبناء من المصدر، شغّل `mvn verify` من جذر المشروع. ستجد الملف في `target/app-icons-0.10.3-cli.jar`.
+للبناء من المصدر، شغّل `mvn verify` من جذر المشروع. ستجد الملف في `target/app-icons-0.10.4-cli.jar`.
 
 يحمل ملف الـCLI مكتبة JSVG معه. ينشئ الأمر داخل `output` ملفّي `app.ico` و`app.icns`،
 وصورة `app.png` بمقاس 512، وسبع صور داخل `png/` بأسماء مثل `icon-16.png` و`icon-256.png`.
@@ -36,8 +36,8 @@ java -jar app-icons-0.10.3-cli.jar logo.svg output
 بعد تنزيل ملف الـCLI، مرّر مجلد موارد Android نفسه كمجلد الإخراج:
 
 ```shell
-java -jar app-icons-0.10.3-cli.jar --android --foreground mark.svg --background-color "#17324d" logo.svg app/src/main/res
-java -jar app-icons-0.10.3-cli.jar --check --android --foreground mark.svg --background-color "#17324d" logo.svg app/src/main/res
+java -jar app-icons-0.10.4-cli.jar --android --foreground mark.svg --background-color "#17324d" logo.svg app/src/main/res
+java -jar app-icons-0.10.4-cli.jar --check --android --foreground mark.svg --background-color "#17324d" logo.svg app/src/main/res
 ```
 
 يرسم `logo.svg` الأيقونة العادية في خمس كثافات من `mdpi` إلى `xxxhdpi`. يرسم `mark.svg` الطبقة الأمامية
@@ -45,7 +45,7 @@ java -jar app-icons-0.10.3-cli.jar --check --android --foreground mark.svg --bac
 يُستخدم الرسم الرئيسي للطبقة الأمامية أيضًا، ولون الخلفية الافتراضي أبيض. تُقرأ الصور النسبية لكل SVG من مجلده.
 يخرج `--check` بالكود `1` إذا اختلف ملف أو غاب، ويترك المخرجات كما هي.
 
-في النسخة المبنية من المصدر، أضف `--monochrome mark-mono.svg` مع `--android` لتوليد طبقة مستقلة لأيقونة الثيم.
+أضف `--monochrome mark-mono.svg` مع `--android` لتوليد طبقة مستقلة لأيقونة الثيم.
 ارسم الشعار على خلفية شفافة في مساحة 108×108 مثل الطبقة الأمامية، مع إبقاء الشعار داخل المنطقة الآمنة.
 يولّد الخيار ملفات `ic_launcher_monochrome.png` في الكثافات الخمس ويربطها بالأيقونة التكيفية.
 عند حذف الخيار تستخدم الأيقونة التكيفية طبقة `--foreground`. أضف نفس الخيار مع `--check` لفحص ملفات الطبقة،
@@ -60,7 +60,7 @@ java -jar app-icons-0.10.3-cli.jar --check --android --foreground mark.svg --bac
 بعد تنزيل ملف الـCLI، شغّل الأمر التالي لتوليد أيقونات الويب وملف الـmanifest في مجلد النشر.
 
 ```shell
-java -jar app-icons-0.10.3-cli.jar --pwa "My App.svg" public
+java -jar app-icons-0.10.4-cli.jar --pwa "My App.svg" public
 ```
 
 | المخرجات داخل `public` | الاستخدام |
@@ -93,8 +93,8 @@ java -jar app-icons-0.10.3-cli.jar --pwa "My App.svg" public
 ```
 
 ```shell
-java -jar app-icons-0.10.3-cli.jar --pwa --manifest-template config/app.webmanifest --background-color "#17324d" logo.svg public
-java -jar app-icons-0.10.3-cli.jar --check --pwa --manifest-template config/app.webmanifest --background-color "#17324d" logo.svg public
+java -jar app-icons-0.10.4-cli.jar --pwa --manifest-template config/app.webmanifest --background-color "#17324d" logo.svg public
+java -jar app-icons-0.10.4-cli.jar --check --pwa --manifest-template config/app.webmanifest --background-color "#17324d" logo.svg public
 ```
 
 احتفظ بالقالب كملف مصدر مستقل عن المخرجات. يستبدل المولّد مصفوفة `icons` في المستوى الأعلى، ويحافظ على بقية
@@ -115,7 +115,7 @@ java -jar app-icons-0.10.3-cli.jar --check --pwa --manifest-template config/app.
 يولّد `--preview` ملف `preview.html` داخل مجلد الإخراج:
 
 ```shell
-java -jar app-icons-0.10.3-cli.jar --preview logo.svg output
+java -jar app-icons-0.10.4-cli.jar --preview logo.svg output
 ```
 
 افتح `output/preview.html` مباشرة في المتصفح. الصور مضمّنة في الصفحة، وتظهر الأيقونة الصغيرة
@@ -134,10 +134,10 @@ java -jar app-icons-0.10.3-cli.jar --preview logo.svg output
 
 ```shell
 # أيقونات سطح المكتب
-java -jar app-icons-0.10.3-cli.jar --check logo.svg output
+java -jar app-icons-0.10.4-cli.jar --check logo.svg output
 
 # أيقونات الويب وملف manifest.webmanifest
-java -jar app-icons-0.10.3-cli.jar --check --pwa "My App.svg" public
+java -jar app-icons-0.10.4-cli.jar --check --pwa "My App.svg" public
 ```
 
 يقارن `--check` محتوى كل ملف متوقع بايتًا ببايت، ويتجاهل الملفات الإضافية. يقرأ الملفات الموجودة
@@ -182,7 +182,7 @@ preview.html text eol=lf
 <dependency>
     <groupId>com.github.MohamedSalah-13</groupId>
     <artifactId>app-icons</artifactId>
-    <version>v0.10.3</version>
+    <version>v0.10.4</version>
 </dependency>
 ```
 
@@ -230,7 +230,7 @@ public class AppIcon {
 يُشغَّل يدويًا عند تعديل الأيقونة فقط، من جذر المشروع، والملفات الناتجة تُحفظ في المستودع:
 
 ```
-java -cp "%USERPROFILE%\.m2\repository\com\github\MohamedSalah-13\app-icons\v0.10.3\app-icons-v0.10.3.jar" packaging\AppIcon.java .
+java -cp "%USERPROFILE%\.m2\repository\com\github\MohamedSalah-13\app-icons\v0.10.4\app-icons-v0.10.4.jar" packaging\AppIcon.java .
 ```
 
 الجار موجود في هذا المسار بعد أي بناء Maven للمشروع.
